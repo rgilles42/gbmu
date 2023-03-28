@@ -1,3 +1,8 @@
+mod cpu;
+
+use crate::cpu::Cpu;
+
 fn main() {
-    println!("Hello, world!");
+    let mut my_cpu = Cpu::new();
+    my_cpu.tick();
 }
