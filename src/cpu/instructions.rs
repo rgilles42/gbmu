@@ -2,7 +2,7 @@ use super::Cpu;
 
 #[derive(Debug, Clone, Copy)]
 pub enum ArithmeticTarget{
-	RegA, RegB, RegC, RegD, RegE, RegH, RegL
+	RegA, RegB, RegC, RegD, RegE, RegH, RegL, HLPointee, RawByte(u8)
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -19,6 +19,7 @@ impl Instruction {
 			0x83 => Some(Instruction::ADD(ArithmeticTarget::RegE)),
 			0x84 => Some(Instruction::ADD(ArithmeticTarget::RegH)),
 			0x85 => Some(Instruction::ADD(ArithmeticTarget::RegL)),
+			0x86 => Some(Instruction::ADD(ArithmeticTarget::HLPointee)),
 			0x87 => Some(Instruction::ADD(ArithmeticTarget::RegA)),
 			_ => None
 		}
@@ -37,7 +38,9 @@ impl Cpu {
 					ArithmeticTarget::RegE => self.registers.e,
 					ArithmeticTarget::RegH => self.registers.h,
 					ArithmeticTarget::RegL => self.registers.l,
+					ArithmeticTarget::HLPointee => self.registers.get_hl_pointee(&self.memory_bus),
 					ArithmeticTarget::RegA => self.registers.a,
+					ArithmeticTarget::RawByte(byte) => byte,
 				}								as u16;
 				// if carry let c = 1;
 				let r = x + y; // + c
