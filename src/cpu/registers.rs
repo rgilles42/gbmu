@@ -1,11 +1,11 @@
 use super::memory_bus::MemoryBus;
 
-const ZERO_FLAG_BYTE_POS:		u8 = 7;
-const SUBSTRACT_FLAG_BYTE_POS:	u8 = 6;
-const HALF_CARRY_FLAG_BYTE_POS:	u8 = 5;
-const CARRY_FLAG_BYTE_POS:		u8 = 4;
+const FLAG_Z_BYTE_POS:	u8 = 7;
+const FLAG_N_BYTE_POS:	u8 = 6;
+const FLAG_H_BYTE_POS:	u8 = 5;
+const FLAG_C_BYTE_POS:	u8 = 4;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct FlagsRegister {
 	pub zero: bool,
 	pub substract: bool,
@@ -15,19 +15,19 @@ pub struct FlagsRegister {
 
 impl std::convert::From<FlagsRegister> for u8  {
 	fn from(flag: FlagsRegister) -> u8 {
-		(if flag.zero		{ 1 } else { 0 }) << ZERO_FLAG_BYTE_POS |
-		(if flag.substract	{ 1 } else { 0 }) << SUBSTRACT_FLAG_BYTE_POS |
-		(if flag.half_carry	{ 1 } else { 0 }) << HALF_CARRY_FLAG_BYTE_POS |
-		(if flag.carry		{ 1 } else { 0 }) << CARRY_FLAG_BYTE_POS
+		(if flag.zero		{ 1 } else { 0 }) << FLAG_Z_BYTE_POS |
+		(if flag.substract	{ 1 } else { 0 }) << FLAG_N_BYTE_POS |
+		(if flag.half_carry	{ 1 } else { 0 }) << FLAG_H_BYTE_POS |
+		(if flag.carry		{ 1 } else { 0 }) << FLAG_C_BYTE_POS
 	}
 }
 
 impl std::convert::From<u8> for FlagsRegister {
 	fn from(byte: u8) -> Self {
-		let zero		= (byte & (1 << ZERO_FLAG_BYTE_POS)) != 0;
-		let substract	= (byte & (1 << SUBSTRACT_FLAG_BYTE_POS)) != 0;
-		let half_carry= (byte & (1 << HALF_CARRY_FLAG_BYTE_POS)) != 0;
-		let carry		= (byte & (1 << CARRY_FLAG_BYTE_POS)) != 0;
+		let zero		= (byte & (1 << FLAG_Z_BYTE_POS)) != 0;
+		let substract	= (byte & (1 << FLAG_N_BYTE_POS)) != 0;
+		let half_carry= (byte & (1 << FLAG_H_BYTE_POS)) != 0;
+		let carry		= (byte & (1 << FLAG_C_BYTE_POS)) != 0;
 		FlagsRegister {
 			zero,
 			substract,
@@ -37,6 +37,7 @@ impl std::convert::From<u8> for FlagsRegister {
 	}
 }
 
+#[derive(Debug)]
 pub struct Registers {
 	pub a: u8,
 	pub f: FlagsRegister,
@@ -47,7 +48,7 @@ pub struct Registers {
 	pub h: u8,
 	pub l: u8,
 	pub program_counter: u16,
-//	pub stack_pointer: u16,
+	pub stack_pointer: u16,
 }
 
 impl Registers {
@@ -67,21 +68,21 @@ impl Registers {
 		memory_bus.read_byte(self.get_hl())
 	}
 
-	// pub fn set_af(&mut self, value: u16) {
-	// 	self.a = (value >> 8) as u8;
-	// 	self.f = (value as u8).into();
-	// }
-	// pub fn set_bc(&mut self, value: u16) {
-	// 	self.b = (value >> 8) as u8;
-	// 	self.c = value as u8;
-	// }
-	// pub fn set_de(&mut self, value: u16) {
-	// 	self.d = (value >> 8) as u8;
-	// 	self.e = value as u8;
-	// }
-	// pub fn set_hl(&mut self, value: u16) {
-	// 	self.h = (value >> 8) as u8;
-	// 	self.l = value as u8;
-	// }
+	pub fn set_af(&mut self, value: u16) {
+		self.a = (value >> 8) as u8;
+		self.f = (value as u8).into();
+	}
+	pub fn set_bc(&mut self, value: u16) {
+		self.b = (value >> 8) as u8;
+		self.c = value as u8;
+	}
+	pub fn set_de(&mut self, value: u16) {
+		self.d = (value >> 8) as u8;
+		self.e = value as u8;
+	}
+	pub fn set_hl(&mut self, value: u16) {
+		self.h = (value >> 8) as u8;
+		self.l = value as u8;
+	}
 	// pub fn set_hl_poinee(data: u8) {}
 }
