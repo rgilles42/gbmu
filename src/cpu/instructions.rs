@@ -12,7 +12,7 @@ pub enum ArithmeticTarget{
 pub enum Instruction {
 	ADDAn(InstrLength, InstrCycles, ArithmeticTarget),
 	ADCAn(InstrLength, InstrCycles, ArithmeticTarget),
-	SUBAn(InstrLength, InstrCycles, ArithmeticTarget),
+	SUBn(InstrLength, InstrCycles, ArithmeticTarget),
 	SBCAn(InstrLength, InstrCycles, ArithmeticTarget)
 }
 
@@ -35,14 +35,14 @@ impl Instruction {
 			0x8D => Some(Instruction::ADCAn(1, 4, ArithmeticTarget::RegL)),
 			0x8E => Some(Instruction::ADCAn(1, 8, ArithmeticTarget::HLPointee)),
 			0x8F => Some(Instruction::ADCAn(1, 4, ArithmeticTarget::RegA)),
-			0x90 => Some(Instruction::SUBAn(1, 4, ArithmeticTarget::RegB)),
-			0x91 => Some(Instruction::SUBAn(1, 4, ArithmeticTarget::RegC)),
-			0x92 => Some(Instruction::SUBAn(1, 4, ArithmeticTarget::RegD)),
-			0x93 => Some(Instruction::SUBAn(1, 4, ArithmeticTarget::RegE)),
-			0x94 => Some(Instruction::SUBAn(1, 4, ArithmeticTarget::RegH)),
-			0x95 => Some(Instruction::SUBAn(1, 4, ArithmeticTarget::RegL)),
-			0x96 => Some(Instruction::SUBAn(1, 8, ArithmeticTarget::HLPointee)),
-			0x97 => Some(Instruction::SUBAn(1, 4, ArithmeticTarget::RegA)),
+			0x90 => Some(Instruction::SUBn(1, 4, ArithmeticTarget::RegB)),
+			0x91 => Some(Instruction::SUBn(1, 4, ArithmeticTarget::RegC)),
+			0x92 => Some(Instruction::SUBn(1, 4, ArithmeticTarget::RegD)),
+			0x93 => Some(Instruction::SUBn(1, 4, ArithmeticTarget::RegE)),
+			0x94 => Some(Instruction::SUBn(1, 4, ArithmeticTarget::RegH)),
+			0x95 => Some(Instruction::SUBn(1, 4, ArithmeticTarget::RegL)),
+			0x96 => Some(Instruction::SUBn(1, 8, ArithmeticTarget::HLPointee)),
+			0x97 => Some(Instruction::SUBn(1, 4, ArithmeticTarget::RegA)),
 			0x98 => Some(Instruction::SBCAn(1, 4, ArithmeticTarget::RegB)),
 			0x99 => Some(Instruction::SBCAn(1, 4, ArithmeticTarget::RegC)),
 			0x9A => Some(Instruction::SBCAn(1, 4, ArithmeticTarget::RegD)),
@@ -54,7 +54,7 @@ impl Instruction {
 
 			0xC6 => Some(Instruction::ADDAn(2, 8, ArithmeticTarget::RawByte)),
 			0xCE => Some(Instruction::ADCAn(2, 8, ArithmeticTarget::RawByte)),
-			0xD6 => Some(Instruction::SUBAn(2, 8, ArithmeticTarget::RawByte)),
+			0xD6 => Some(Instruction::SUBn(2, 8, ArithmeticTarget::RawByte)),
 			0xDE => Some(Instruction::SBCAn(2, 8, ArithmeticTarget::RawByte)),
 			_ => None
 		}
@@ -76,17 +76,17 @@ impl Cpu {
 					ArithmeticTarget::RegL => self.registers.l,
 					ArithmeticTarget::HLPointee => self.registers.get_hl_pointee(&self.memory_bus),
 					ArithmeticTarget::RawByte => self.fetch_pc(),
-				}								as u16;
+				}											as u16;
 				// if instr is ADC and carry flag is true, let carry = 1;
-				let carry = if let Instruction::ADCAn(_, _, _) = instruction {self.registers.f.carry as u16} else {0};
-				let r = reg_a_content + target_content + carry;
+				let carry_val = if let Instruction::ADCAn(_, _, _) = instruction {self.registers.f.carry as u16} else {0};
+				let r = reg_a_content + target_content + carry_val;
 				self.registers.f.zero = r == 0;
 				self.registers.f.substract = false;
-				self.registers.f.half_carry = (reg_a_content & 0xF) + (target_content & 0xF) + carry >= 0x10;
-				self.registers.f.carry = r >= 0x100;
+				self.registers.f.half_carry = (reg_a_content & 0xF) + (target_content & 0xF) + carry_val >= 0x10;
+				self.registers.f.carry = r & 0x100 != 0;					// reg_a_content + target_content + carry >= 0x100
 				self.registers.a = r as u8;
 			},
-			Instruction::SUBAn(_, _, target) | Instruction::SBCAn(_, _, target) => {
+			Instruction::SUBn(_, _, target) | Instruction::SBCAn(_, _, target) => {
 				let reg_a_content = self.registers.a	as u16;
 				let target_content = match target {
 					ArithmeticTarget::RegA => self.registers.a,
@@ -98,14 +98,14 @@ impl Cpu {
 					ArithmeticTarget::RegL => self.registers.l,
 					ArithmeticTarget::HLPointee => self.registers.get_hl_pointee(&self.memory_bus),
 					ArithmeticTarget::RawByte => self.fetch_pc(),
-				}								as u16;
+				}											as u16;
 				// if instr is ADC and carry flag is true, let carry = 1;
-				let carry = if let Instruction::SBCAn(_, _, _) = instruction {self.registers.f.carry as u16} else {0};
-				let r = reg_a_content - target_content - carry;
+				let carry_val = if let Instruction::SBCAn(_, _, _) = instruction {self.registers.f.carry as u16} else {0};
+				let r = reg_a_content - target_content - carry_val;
 				self.registers.f.zero = r == 0;
 				self.registers.f.substract = true;
-				self.registers.f.half_carry = (target_content & 0xF) + carry > (reg_a_content & 0xF);
-				self.registers.f.carry = r >= 0x100;
+				self.registers.f.half_carry = (reg_a_content & 0xF) - carry_val < (target_content & 0xF);	// from what I understood of the nintendo datasheet
+				self.registers.f.carry = r & 0x100 != 0; 					// reg_a_content < target_content + carry;
 				self.registers.a = r as u8;
 			}
 		}
