@@ -1,5 +1,8 @@
 use super::Cpu;
 
+type InstrLength = u8;
+type InstrCycles = u8;
+
 #[derive(Debug, Clone, Copy)]
 pub enum ArithmeticTarget{
 	RegA, RegB, RegC, RegD, RegE, RegH, RegL, HLPointee, RawByte
@@ -7,21 +10,21 @@ pub enum ArithmeticTarget{
 
 #[derive(Debug, Clone, Copy)]
 pub enum Instruction {
-	ADD(ArithmeticTarget)
+	ADD(InstrLength, InstrCycles, ArithmeticTarget)
 }
 
 impl Instruction {
 	pub fn from_opcode(opcode: u8) -> Option<Instruction> {
 		match opcode {
-			0x80 => Some(Instruction::ADD(ArithmeticTarget::RegB)),
-			0x81 => Some(Instruction::ADD(ArithmeticTarget::RegC)),
-			0x82 => Some(Instruction::ADD(ArithmeticTarget::RegD)),
-			0x83 => Some(Instruction::ADD(ArithmeticTarget::RegE)),
-			0x84 => Some(Instruction::ADD(ArithmeticTarget::RegH)),
-			0x85 => Some(Instruction::ADD(ArithmeticTarget::RegL)),
-			0x86 => Some(Instruction::ADD(ArithmeticTarget::HLPointee)),
-			0x87 => Some(Instruction::ADD(ArithmeticTarget::RegA)),
-			0xC6 => Some(Instruction::ADD(ArithmeticTarget::RawByte)),
+			0x80 => Some(Instruction::ADD(1, 4, ArithmeticTarget::RegB)),
+			0x81 => Some(Instruction::ADD(1, 4, ArithmeticTarget::RegC)),
+			0x82 => Some(Instruction::ADD(1, 4, ArithmeticTarget::RegD)),
+			0x83 => Some(Instruction::ADD(1, 4, ArithmeticTarget::RegE)),
+			0x84 => Some(Instruction::ADD(1, 4, ArithmeticTarget::RegH)),
+			0x85 => Some(Instruction::ADD(1, 4, ArithmeticTarget::RegL)),
+			0x86 => Some(Instruction::ADD(1, 8, ArithmeticTarget::HLPointee)),
+			0x87 => Some(Instruction::ADD(1, 4, ArithmeticTarget::RegA)),
+			0xC6 => Some(Instruction::ADD(2, 8, ArithmeticTarget::RawByte)),
 			_ => None
 		}
 	}
@@ -30,7 +33,7 @@ impl Instruction {
 impl Cpu {
 	pub fn execute_op(&mut self, instruction: Instruction) {
 		match instruction {
-			Instruction::ADD(target) => {
+			Instruction::ADD(_, _, target) => {
 				let x = self.registers.a	as u16;
 				let y = match target {
 					ArithmeticTarget::RegA => self.registers.a,
