@@ -15,16 +15,12 @@ pub struct Cpu {
 impl Cpu {
 	pub fn new() -> Self {
 		let mut cpu = Cpu {
-			registers: Registers {a: 0, b: 0, c: 0, d: 0, e: 0, f: 0.into(), h: 0, l: 0, program_counter: 0x0000, stack_pointer : 0x0000},
-    		memory_bus: MemoryBus{memory: [0x80; 0xFFFF]},
+			registers: Registers::new(),
+    		memory_bus: MemoryBus::new(),
     		current_op: None,
 		};
-		cpu.registers.program_counter = 0x100;
-		cpu.registers.set_af(0x01B0);
-		cpu.registers.set_bc(0x0013);
-		cpu.registers.set_de(0x00D8);
-		cpu.registers.set_hl(0x014D);
-		cpu.registers.stack_pointer = 0xFFFE;
+		cpu.registers.init();
+		cpu.memory_bus.init();
 		cpu
 	}
 	pub fn tick(&mut self) {

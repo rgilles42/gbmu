@@ -52,6 +52,17 @@ pub struct Registers {
 }
 
 impl Registers {
+	pub fn new() -> Self {
+		Registers {a: 0, b: 0, c: 0, d: 0, e: 0, f: 0.into(), h: 0, l: 0, program_counter: 0x0000, stack_pointer : 0x0000}
+	}
+	pub fn init(&mut self) {
+		self.program_counter = 0x100;
+		self.set_af(0x01B0);			// GB/SGB - 0x01B0; GBP - 0xFFB0; GBC - 0x11B0
+		self.set_bc(0x0013);
+		self.set_de(0x00D8);
+		self.set_hl(0x014D);
+		self.stack_pointer = 0xFFFE;
+	}
 	// pub fn get_af(&self) -> u16 {
 	// 	(self.a as u16) << 8 | u8::from(self.f) as u16
 	// }
