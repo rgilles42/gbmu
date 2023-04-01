@@ -13,7 +13,8 @@ pub enum Instruction {
 	ADDAn(InstrLength, InstrCycles, ArithmeticTarget),
 	ADCAn(InstrLength, InstrCycles, ArithmeticTarget),
 	SUBn(InstrLength, InstrCycles, ArithmeticTarget),
-	SBCAn(InstrLength, InstrCycles, ArithmeticTarget)
+	SBCAn(InstrLength, InstrCycles, ArithmeticTarget),
+	NOP(InstrLength, InstrCycles)
 }
 
 impl Instruction {
@@ -104,10 +105,11 @@ impl Cpu {
 				let r = reg_a_content - target_content - carry_val;
 				self.registers.f.zero = r == 0;
 				self.registers.f.substract = true;
-				self.registers.f.half_carry = (reg_a_content & 0xF) - carry_val < (target_content & 0xF);	// from what I understood of the nintendo datasheet
-				self.registers.f.carry = r & 0x100 != 0; 					// reg_a_content < target_content + carry;
+				self.registers.f.half_carry = (reg_a_content & 0xF) - carry_val < (target_content & 0xF);	// carry val is subs befor comp, from what I got of the nintendo manual
+				self.registers.f.carry = r & 0x100 != 0; 					// reg_a_content < target_content + carry; In unsigned logic, a borrow from the next unset bit sets it
 				self.registers.a = r as u8;
-			}
+			},
+			Instruction::NOP(_, _) => {}
 		}
 	}
 }

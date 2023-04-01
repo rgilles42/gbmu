@@ -9,7 +9,8 @@ use instructions::Instruction;
 pub struct Cpu {
 	registers: Registers,
 	memory_bus: MemoryBus,
-	current_op: Option<Instruction>
+	current_op: Option<Instruction>,
+	next_op: Option<Instruction>
 }
 
 impl Cpu {
@@ -17,25 +18,27 @@ impl Cpu {
 		let mut cpu = Cpu {
 			registers: Registers::new(),
     		memory_bus: MemoryBus::new(),
-    		current_op: None,
+    		current_op: Some(Instruction::NOP(1, 1)),				// Fake 'execute' of first tick which is just a 'fetch' 
+			next_op: None
 		};
 		cpu.registers.init();
 		cpu.memory_bus.init();
 		cpu
 	}
 	pub fn tick(&mut self) {
-		self.fetch_opcode();
-		self.exec();
+		self.exec_current_op();
+		self.fetch_next_opcode();									// Account for Sharp SM83 fetch/execute overlap
+		self.current_op = self.next_op;
 	}
-	fn fetch_opcode(&mut self) {
-		self.current_op = Instruction::from_opcode(self.fetch_pc());
+	fn fetch_next_opcode(&mut self) {
+		self.next_op = Instruction::from_opcode(self.fetch_pc());
 	}
-	fn exec(&mut self) {
+	fn exec_current_op(&mut self) {
 		self.execute_op(
 			if let Some(instruction) = self.current_op {
 				instruction
 			} else {
-				panic!("Unknown opcode 0x{:x}!", self.memory_bus.read_byte(self.registers.program_counter - 1));
+				panic!("Unknown opcode 0x{:x} at location 0x{:x}!", self.memory_bus.read_byte(self.registers.program_counter - 1), self.registers.program_counter - 1);
 			}
 		)
 	}
