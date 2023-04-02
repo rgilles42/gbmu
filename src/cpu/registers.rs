@@ -95,5 +95,7 @@ impl Registers {
 		self.h = (value >> 8) as u8;
 		self.l = value as u8;
 	}
-	// pub fn set_hl_poinee(data: u8) {}
+	pub fn set_hl_pointee(&self, memory_bus: &mut MemoryBus, data: u8) {
+		memory_bus.write_byte(self.get_hl(), data)
+	}
 }
