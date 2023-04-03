@@ -5,7 +5,7 @@ type InstrCycles = u8;
 
 #[derive(Debug, Clone, Copy)]
 pub enum ArithmeticOperand{
-	RegA, RegB, RegC, RegD, RegE, RegH, RegL, HLPointee, RawByte
+	RegA, RegB, RegC, RegD, RegE, RegH, RegL, HLPointee, ByteFromPC
 }
 #[derive(Debug, Clone, Copy)]
 pub enum LargeArithmeticOperand{
@@ -37,6 +37,10 @@ pub enum Instruction {
 	XORs(InstrLength, InstrCycles, ArithmeticOperand),
 	ORs(InstrLength, InstrCycles, ArithmeticOperand),
 	CPs(InstrLength, InstrCycles, ArithmeticOperand),
+	CCF(InstrLength, InstrCycles),
+	SCF(InstrLength, InstrCycles),
+	DAA(InstrLength, InstrCycles),
+	CPL(InstrLength, InstrCycles),
 }
 
 impl Instruction {
@@ -60,18 +64,21 @@ impl Instruction {
 			0x23 => Some(Instruction::INCss(1, 8, TargetRegPair::RegsHL)),
 			0x24 => Some(Instruction::INCs(1, 4, TargetReg::RegH)),
 			0x25 => Some(Instruction::DECs(1, 4, TargetReg::RegH)),
+			0x27 => Some(Instruction::DAA(1, 4)),
 			0x29 => Some(Instruction::ADDHLss(1, 8, LargeArithmeticOperand::RegsHL)),
 			0x2B => Some(Instruction::DECss(1, 8, TargetRegPair::RegsHL)),
 			0x2C => Some(Instruction::INCs(1, 4, TargetReg::RegL)),
 			0x2D => Some(Instruction::DECs(1, 4, TargetReg::RegL)),
+			0x2F => Some(Instruction::CPL(1, 4)),
 			0x33 => Some(Instruction::INCss(1, 8, TargetRegPair::RegSP)),
 			0x34 => Some(Instruction::INCs(1, 12, TargetReg::HLPointee)),
 			0x35 => Some(Instruction::DECs(1, 12, TargetReg::HLPointee)),
+			0x37 => Some(Instruction::SCF(1, 4)),
 			0x39 => Some(Instruction::ADDHLss(1, 8, LargeArithmeticOperand::RegSP)),
 			0x3B => Some(Instruction::DECss(1, 8, TargetRegPair::RegSP)),
 			0x3C => Some(Instruction::INCs(1, 4, TargetReg::RegA)),
 			0x3D => Some(Instruction::DECs(1, 4, TargetReg::RegA)),
-
+			0x3F => Some(Instruction::CCF(1, 4)),
 			0x80 => Some(Instruction::ADDAs(1, 4, ArithmeticOperand::RegB)),
 			0x81 => Some(Instruction::ADDAs(1, 4, ArithmeticOperand::RegC)),
 			0x82 => Some(Instruction::ADDAs(1, 4, ArithmeticOperand::RegD)),
@@ -137,15 +144,15 @@ impl Instruction {
 			0xBE => Some(Instruction::CPs(1, 8, ArithmeticOperand::HLPointee)),
 			0xBF => Some(Instruction::CPs(1, 4, ArithmeticOperand::RegA)),
 
-			0xC6 => Some(Instruction::ADDAs(2, 8, ArithmeticOperand::RawByte)),
-			0xCE => Some(Instruction::ADCAs(2, 8, ArithmeticOperand::RawByte)),
-			0xD6 => Some(Instruction::SUBs(2, 8, ArithmeticOperand::RawByte)),
-			0xDE => Some(Instruction::SBCAs(2, 8, ArithmeticOperand::RawByte)),
-			0xE6 => Some(Instruction::ANDs(2, 8, ArithmeticOperand::RawByte)),
+			0xC6 => Some(Instruction::ADDAs(2, 8, ArithmeticOperand::ByteFromPC)),
+			0xCE => Some(Instruction::ADCAs(2, 8, ArithmeticOperand::ByteFromPC)),
+			0xD6 => Some(Instruction::SUBs(2, 8, ArithmeticOperand::ByteFromPC)),
+			0xDE => Some(Instruction::SBCAs(2, 8, ArithmeticOperand::ByteFromPC)),
+			0xE6 => Some(Instruction::ANDs(2, 8, ArithmeticOperand::ByteFromPC)),
 			0xE8 => Some(Instruction::ADDSPe(2, 16)),
-			0xEE => Some(Instruction::XORs(2, 8, ArithmeticOperand::RawByte)),
-			0xF6 => Some(Instruction::ORs(2, 8, ArithmeticOperand::RawByte)),
-			0xFE => Some(Instruction::CPs(2, 8, ArithmeticOperand::RawByte)),
+			0xEE => Some(Instruction::XORs(2, 8, ArithmeticOperand::ByteFromPC)),
+			0xF6 => Some(Instruction::ORs(2, 8, ArithmeticOperand::ByteFromPC)),
+			0xFE => Some(Instruction::CPs(2, 8, ArithmeticOperand::ByteFromPC)),
 			_ => None
 		}
 	}
@@ -162,7 +169,7 @@ impl Cpu {
 			ArithmeticOperand::RegH => self.registers.h,
 			ArithmeticOperand::RegL => self.registers.l,
 			ArithmeticOperand::HLPointee => self.registers.get_hl_pointee(&self.memory_bus),
-			ArithmeticOperand::RawByte => self.fetch_pc()
+			ArithmeticOperand::ByteFromPC => self.fetch_pc()
 		}
 	}
 	pub fn get_large_operand_value(&mut self, operand: LargeArithmeticOperand) -> u16 {
@@ -278,25 +285,25 @@ impl Cpu {
 				self.registers.f.zero = target_value == 0xFF;
 				self.registers.f.substract = false;
 				self.registers.f.half_carry = (target_value & 0xF) + 1 >= 0x10;
-				self.set_target_reg_value(_target, target_value + 1);
+				self.set_target_reg_value(_target, target_value.overflowing_add(1).0);
 			}
 			Instruction::DECs(_, _, _target) => {
 				let target_value = self.get_target_reg_value(_target);
 				self.registers.f.zero = target_value == 0x01;
 				self.registers.f.substract = true;
 				self.registers.f.half_carry = target_value & 0xF < 1;
-				self.set_target_reg_value(_target, target_value - 1);
+				self.set_target_reg_value(_target, target_value.overflowing_sub(1).0);
 			}
 			Instruction::INCss(_, _, _target) => {
-				self.set_target_pair_value(_target, self.get_target_pair_value(_target) + 1);
+				self.set_target_pair_value(_target, self.get_target_pair_value(_target).overflowing_add(1).0);
 			}
 			Instruction::DECss(_, _, _target) => {
-				self.set_target_pair_value(_target, self.get_target_pair_value(_target) - 1);
+				self.set_target_pair_value(_target, self.get_target_pair_value(_target).overflowing_sub(1).0);
 			}
 			Instruction::ADDHLss(_, _, _operand) => {
 				let hl_value = self.registers.get_hl();
 				let operand_value = self.get_large_operand_value(_operand);
-				let r = hl_value + operand_value;
+				let r = hl_value.overflowing_add(operand_value).0;
 				self.registers.f.substract = false;
 				self.registers.f.half_carry = (hl_value & 0x0FFF) + (operand_value & 0x0FFF) >= 0x1000;
 				self.registers.f.carry = r < hl_value;
@@ -305,15 +312,54 @@ impl Cpu {
 			Instruction::ADDSPe(_, _) => {
 				let sp_value = self.registers.stack_pointer;
 				let operand_value = self.fetch_pc() as i8;
-
-				let b = (operand_value as u8) as u16;
-				let n = (sp_value as i32 + b as i32) as u16;
+				let operand_value = operand_value as u16;
+				let res = (sp_value as i32 + operand_value as i32) as u16;
 
 				self.registers.f.zero = false;
 				self.registers.f.substract = false;
-				self.registers.f.half_carry = sp_value & 0x000F + b & 0x000F >= 0x10;
-				self.registers.f.carry = sp_value & 0x00FF + b >= 0x100;
-				self.registers.stack_pointer = n;
+				self.registers.f.half_carry = sp_value & 0x000F + operand_value & 0x000F >= 0x10;
+				self.registers.f.carry = sp_value & 0x00FF + operand_value >= 0x100;
+				self.registers.stack_pointer = res;
+			}
+			Instruction::CCF(_, _) => {
+				self.registers.f.substract = false;
+				self.registers.f.half_carry = false;
+				self.registers.f.carry = !self.registers.f.carry;
+			}
+			Instruction::SCF(_, _) => {
+				self.registers.f.substract = false;
+				self.registers.f.half_carry = false;
+				self.registers.f.carry = true;
+			}
+			Instruction::DAA(_, _) => {
+				let reg_a_content = self.registers.a as u16;
+				let mut daa_term = 0 as i8;
+				if self.registers.f.substract {
+					if self.registers.f.half_carry {
+						daa_term -= 0x06
+					}
+					if self.registers.f.carry {
+						daa_term -= 0x60;
+					}
+				} else {
+					if self.registers.f.carry || reg_a_content > 0x99 {
+						self.registers.f.carry = true;
+						daa_term += 0x60;
+					}
+					if self.registers.f.half_carry || (reg_a_content & 0x0F) > 0x09 {
+						daa_term += 0x06;
+					}
+				}
+				let daa_term = daa_term as u8 as u16;
+				let reg_a_content = (reg_a_content + daa_term) as u8;
+				self.registers.f.zero = reg_a_content == 0;
+				self.registers.f.half_carry = false;
+				self.registers.a = reg_a_content;
+			}
+			Instruction::CPL(_, _) => {
+				self.registers.a = !self.registers.a;
+				self.registers.f.substract = true;
+				self.registers.f.half_carry = true;
 			}
 		}
 	}
