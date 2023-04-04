@@ -229,7 +229,7 @@ impl Cpu {
 				// if instr is ADC and carry flag is true, let carry = 1;
 				let carry_val = if let Instruction::ADCAs(_, _, _) = instruction {self.registers.f.carry as u16} else {0};
 				let r = reg_a_content + operand_val + carry_val;
-				self.registers.f.zero = r == 0;
+				self.registers.f.zero = r as u8 == 0;
 				self.registers.f.substract = false;
 				self.registers.f.half_carry = (reg_a_content & 0xF) + (operand_val & 0xF) + carry_val >= 0x10;
 				self.registers.f.carry = r & 0x100 != 0;					// reg_a_content + operand + carry >= 0x100
@@ -240,8 +240,8 @@ impl Cpu {
 				let operand_val = self.get_operand_value(_operand) as u16;
 				// if instr is ADC and carry flag is true, let carry = 1;
 				let carry_val = if let Instruction::SBCAs(_, _, _) = instruction {self.registers.f.carry as u16} else {0};
-				let r = reg_a_content - operand_val - carry_val;
-				self.registers.f.zero = r == 0;
+				let r = reg_a_content.overflowing_sub(operand_val + carry_val).0;
+				self.registers.f.zero = r as u8 == 0;
 				self.registers.f.substract = true;
 				self.registers.f.half_carry = (reg_a_content & 0xF) - carry_val < (operand_val & 0xF);	// carry val is subs befor comp, from what I got of the nintendo manual
 				self.registers.f.carry = r & 0x100 != 0; 					// reg_a_content < operand + carry; In unsigned logic, a borrow from the next unset bit sets it
@@ -274,8 +274,8 @@ impl Cpu {
 			Instruction::CPs(_, _, _operand) => {
 				let reg_a_content = self.registers.a as u16;
 				let operand_val = self.get_operand_value(_operand) as u16;
-				let r = reg_a_content - operand_val;
-				self.registers.f.zero = r == 0;
+				let r = reg_a_content.overflowing_sub(operand_val).0;
+				self.registers.f.zero = r as u8 == 0;
 				self.registers.f.substract = true;
 				self.registers.f.half_carry = (reg_a_content & 0xF) < (operand_val & 0xF);
 				self.registers.f.carry = r & 0x100 != 0;
@@ -311,14 +311,12 @@ impl Cpu {
 			}
 			Instruction::ADDSPe(_, _) => {
 				let sp_value = self.registers.stack_pointer;
-				let operand_value = self.fetch_pc() as i8;
-				let operand_value = operand_value as u16;
-				let res = (sp_value as i32 + operand_value as i32) as u16;
-
+				let operand_value = self.fetch_pc() as i8 as u16;
+				let res = sp_value.overflowing_add(operand_value).0;
 				self.registers.f.zero = false;
 				self.registers.f.substract = false;
-				self.registers.f.half_carry = sp_value & 0x000F + operand_value & 0x000F >= 0x10;
-				self.registers.f.carry = sp_value & 0x00FF + operand_value >= 0x100;
+				self.registers.f.half_carry = (sp_value & 0xF) + (operand_value & 0xF) >= 0x10;
+				self.registers.f.carry = (sp_value & 0xFF) + (operand_value & 0xFF) >= 0x100;
 				self.registers.stack_pointer = res;
 			}
 			Instruction::CCF(_, _) => {
@@ -362,5 +360,87 @@ impl Cpu {
 				self.registers.f.half_carry = true;
 			}
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use crate::{*, cpu::{registers::FlagsRegister, instructions::LargeArithmeticOperand}};
+
+use super::{Instruction, ArithmeticOperand};
+	fn test_adds(cpu: &mut Cpu, init_a_value: u8, expected_res: u8, expected_flag_reg: FlagsRegister) {
+		cpu.current_op = Some(Instruction::ADDAs(1, 4, ArithmeticOperand::RegA));
+		cpu.registers.a = init_a_value;
+		cpu.exec_current_op();
+		assert_eq!(cpu.registers.a, expected_res);
+		assert_eq!(cpu.registers.f, expected_flag_reg);
+	}
+	fn test_sub(cpu: &mut Cpu, init_a_value: u8, operand: u8, expected_res: u8, expected_flag_reg: FlagsRegister) {
+		cpu.current_op = Some(Instruction::SUBs(1, 4, ArithmeticOperand::RegB));
+		cpu.registers.a = init_a_value;
+		cpu.registers.b = operand;
+		cpu.exec_current_op();
+		assert_eq!(cpu.registers.a, expected_res);
+		assert_eq!(cpu.registers.f, expected_flag_reg);
+	}
+	fn test_cps(cpu: &mut Cpu, init_a_value: u8, operand: u8, expected_flag_reg: FlagsRegister) {
+		cpu.current_op = Some(Instruction::CPs(1, 4, ArithmeticOperand::RegB));
+		cpu.registers.a = init_a_value;
+		cpu.registers.b = operand;
+		cpu.exec_current_op();
+		assert_eq!(cpu.registers.f, expected_flag_reg);
+	}
+	fn test_addhlss(cpu: &mut Cpu, init_hl_value: u16, expected_res: u16, expected_flag_reg: FlagsRegister) {
+		cpu.current_op = Some(Instruction::ADDHLss(1, 8, LargeArithmeticOperand::RegsHL));
+		cpu.registers.set_hl(init_hl_value);
+		cpu.exec_current_op();
+		assert_eq!(cpu.registers.get_hl(), expected_res);
+		assert_eq!(cpu.registers.f, expected_flag_reg);
+	}
+	fn test_addspe(cpu: &mut Cpu, init_sp_value: u16, operand: i8, expected_res: u16, expected_flag_reg: FlagsRegister) {
+		cpu.current_op = Some(Instruction::ADDSPe(2, 16));
+		cpu.registers.stack_pointer = init_sp_value;
+		cpu.memory_bus.write_byte(cpu.registers.program_counter, operand as u8);
+		cpu.exec_current_op();
+		assert_eq!(cpu.registers.stack_pointer, expected_res);
+		assert_eq!(cpu.registers.f, expected_flag_reg);
+	}
+	fn test_daa(cpu: &mut Cpu, expected_res: u8, expected_flag_reg: FlagsRegister) {
+		cpu.current_op = Some(Instruction::DAA(1, 4));
+		cpu.exec_current_op();
+		assert_eq!(cpu.registers.a, expected_res);
+		assert_eq!(cpu.registers.f, expected_flag_reg);
+	}
+	#[test]
+	fn test_arith() {
+		let mut my_cpu = Cpu::new();
+		test_adds(&mut my_cpu, 0x12, 0x24, 0x00.into());
+		test_adds(&mut my_cpu, 0x80, 0x00, FlagsRegister{ zero: true, substract: false, half_carry: false, carry: true });
+		test_adds(&mut my_cpu, 0xF1, 0xE2, FlagsRegister{ zero: false, substract: false, half_carry: false, carry: true });
+		test_adds(&mut my_cpu, 0xFF, 0xFE, FlagsRegister{ zero: false, substract: false, half_carry: true, carry: true });
+		test_sub(&mut my_cpu, 0xFF, 0x10, 0xEF, FlagsRegister{ zero: false, substract: true, half_carry: false, carry: false });
+		test_sub(&mut my_cpu, 0xFF, 0xFF, 0x00, FlagsRegister{ zero: true, substract: true, half_carry: false, carry: false });
+		test_sub(&mut my_cpu, 0xF1, 0x0F, 0xE2, FlagsRegister{ zero: false, substract: true, half_carry: true, carry: false });
+		test_sub(&mut my_cpu, 0x10, 0x20, 0xF0, FlagsRegister{ zero: false, substract: true, half_carry: false, carry: true });
+		test_sub(&mut my_cpu, 0x10, 0x21, 0xEF, FlagsRegister{ zero: false, substract: true, half_carry: true, carry: true });
+		test_cps(&mut my_cpu, 0xFF, 0x10, FlagsRegister{ zero: false, substract: true, half_carry: false, carry: false });
+		test_cps(&mut my_cpu, 0xFF, 0xFF, FlagsRegister{ zero: true, substract: true, half_carry: false, carry: false });
+		test_cps(&mut my_cpu, 0xF1, 0x0F, FlagsRegister{ zero: false, substract: true, half_carry: true, carry: false });
+		test_cps(&mut my_cpu, 0x10, 0x20, FlagsRegister{ zero: false, substract: true, half_carry: false, carry: true });
+		test_cps(&mut my_cpu, 0x10, 0x21, FlagsRegister{ zero: false, substract: true, half_carry: true, carry: true });
+
+		test_addhlss(&mut my_cpu, 0x8A23, 0x1446, FlagsRegister{ zero: false, substract: false, half_carry: true, carry: true });
+		test_addhlss(&mut my_cpu, 0x0000, 0x0000, FlagsRegister{ zero: false, substract: false, half_carry: false, carry: false });
+		test_addspe(&mut my_cpu, 0xFFF8, 0x02, 0xFFFA, FlagsRegister{ zero: false, substract: false, half_carry: false, carry: false });
+		test_addspe(&mut my_cpu, 0xFF88, 0x0F, 0xFF97, FlagsRegister{ zero: false, substract: false, half_carry: true, carry: false });
+		test_addspe(&mut my_cpu, 0xF8D8, 0x2F, 0xF907, FlagsRegister{ zero: false, substract: false, half_carry: true, carry: true });
+		test_addspe(&mut my_cpu, 0xF8D8, -0x24, 0xF8B4, FlagsRegister{ zero: false, substract: false, half_carry: true, carry: true });
+
+		test_adds(&mut my_cpu, 0x45, 0x8A, FlagsRegister{ zero: false, substract: false, half_carry: false, carry: false });
+		test_daa(&mut my_cpu, 0x90, FlagsRegister{ zero: false, substract: false, half_carry: false, carry: false });
+		test_adds(&mut my_cpu, 0x91, 0x22, FlagsRegister{ zero: false, substract: false, half_carry: false, carry: true });
+		test_daa(&mut my_cpu, 0x82, FlagsRegister{ zero: false, substract: false, half_carry: false, carry: true });
+		test_sub(&mut my_cpu, 0x83, 0x38, 0x4B, FlagsRegister{ zero: false, substract: true, half_carry: true, carry: false });
+		test_daa(&mut my_cpu, 0x45, FlagsRegister{ zero: false, substract: true, half_carry: false, carry: false });
 	}
 }

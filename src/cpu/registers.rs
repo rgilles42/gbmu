@@ -5,7 +5,7 @@ const FLAG_N_BYTE_POS:	u8 = 6;
 const FLAG_H_BYTE_POS:	u8 = 5;
 const FLAG_C_BYTE_POS:	u8 = 4;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FlagsRegister {
 	pub zero: bool,
 	pub substract: bool,
