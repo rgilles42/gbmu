@@ -75,10 +75,6 @@ impl Registers {
 	pub fn get_hl(&self) -> u16 {
 		(self.h as u16) << 8 | self.l as u16
 	}
-	pub fn get_hl_pointee(&self, memory_bus: &MemoryBus) -> u8 {
-		memory_bus.read_byte(self.get_hl())
-	}
-
 	pub fn set_af(&mut self, value: u16) {
 		self.a = (value >> 8) as u8;
 		self.f = (value as u8).into();
@@ -94,6 +90,21 @@ impl Registers {
 	pub fn set_hl(&mut self, value: u16) {
 		self.h = (value >> 8) as u8;
 		self.l = value as u8;
+	}
+	pub fn get_bc_pointee(&self, memory_bus: &MemoryBus) -> u8 {
+		memory_bus.read_byte(self.get_bc())
+	}
+	pub fn get_de_pointee(&self, memory_bus: &MemoryBus) -> u8 {
+		memory_bus.read_byte(self.get_de())
+	}
+	pub fn get_hl_pointee(&self, memory_bus: &MemoryBus) -> u8 {
+		memory_bus.read_byte(self.get_hl())
+	}
+	pub fn set_bc_pointee(&self, memory_bus: &mut MemoryBus, data: u8) {
+		memory_bus.write_byte(self.get_bc(), data)
+	}
+	pub fn set_de_pointee(&self, memory_bus: &mut MemoryBus, data: u8) {
+		memory_bus.write_byte(self.get_de(), data)
 	}
 	pub fn set_hl_pointee(&self, memory_bus: &mut MemoryBus, data: u8) {
 		memory_bus.write_byte(self.get_hl(), data)

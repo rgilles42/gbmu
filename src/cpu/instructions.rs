@@ -12,21 +12,24 @@ pub enum LargeArithmeticOperand{
 	RegsBC, RegsDE, RegsHL, RegSP
 }
 #[derive(Debug, Clone, Copy)]
-pub enum TargetReg{
-	RegA, RegB, RegC, RegD, RegE, RegH, RegL, HLPointee
+pub enum Regs{
+	RegA, RegB, RegC, RegD, RegE, RegH, RegL, HLPointee, BCPointee, DEPointee, BytesFromPCPointee, UpperRamOffsetFromPC, UpperRamOffsetFromRegC, ByteFromPC
 }
 #[derive(Debug, Clone, Copy)]
-pub enum TargetRegPair{
+pub enum RegPairs{
 	RegsBC, RegsDE, RegsHL, RegSP
 }
 
 #[derive(Debug, Clone, Copy)]
 pub enum Instruction {
 	NOP(InstrLength, InstrCycles),
-	INCs(InstrLength, InstrCycles, TargetReg),
-	INCss(InstrLength, InstrCycles, TargetRegPair),
-	DECs(InstrLength, InstrCycles, TargetReg),
-	DECss(InstrLength, InstrCycles, TargetRegPair),
+	LD(InstrLength, InstrCycles, Regs, Regs),
+	LDI(InstrLength, InstrCycles, Regs, Regs),
+	LDD(InstrLength, InstrCycles, Regs, Regs),
+	INCs(InstrLength, InstrCycles, Regs),
+	INCss(InstrLength, InstrCycles, RegPairs),
+	DECs(InstrLength, InstrCycles, Regs),
+	DECss(InstrLength, InstrCycles, RegPairs),
 	ADDAs(InstrLength, InstrCycles, ArithmeticOperand),
 	ADDHLss(InstrLength, InstrCycles, LargeArithmeticOperand),
 	ADDSPe(InstrLength, InstrCycles),
@@ -47,38 +50,117 @@ impl Instruction {
 	pub fn from_opcode(opcode: u8) -> Option<Instruction> {
 		match opcode {
 			0x00 => Some(Instruction::NOP(1, 4)),
-			0x03 => Some(Instruction::INCss(1, 8, TargetRegPair::RegsBC)),
-			0x04 => Some(Instruction::INCs(1, 4, TargetReg::RegB)),
-			0x05 => Some(Instruction::DECs(1, 4, TargetReg::RegB)),
+			0x02 => Some(Instruction::LD(1, 8, Regs::BCPointee, Regs::RegA)),
+			0x03 => Some(Instruction::INCss(1, 8, RegPairs::RegsBC)),
+			0x04 => Some(Instruction::INCs(1, 4, Regs::RegB)),
+			0x05 => Some(Instruction::DECs(1, 4, Regs::RegB)),
+			0x06 => Some(Instruction::LD(2, 8, Regs::RegB, Regs::ByteFromPC)),
 			0x09 => Some(Instruction::ADDHLss(1, 8, LargeArithmeticOperand::RegsBC)),
-			0x0B => Some(Instruction::DECss(1, 8, TargetRegPair::RegsBC)),
-			0x0C => Some(Instruction::INCs(1, 4, TargetReg::RegC)),
-			0x0D => Some(Instruction::DECs(1, 4, TargetReg::RegC)),
-			0x13 => Some(Instruction::INCss(1, 8, TargetRegPair::RegsDE)),
-			0x14 => Some(Instruction::INCs(1, 4, TargetReg::RegD)),
-			0x15 => Some(Instruction::DECs(1, 4, TargetReg::RegD)),
+			0x0A => Some(Instruction::LD(1, 8, Regs::RegA, Regs::BCPointee)),
+			0x0B => Some(Instruction::DECss(1, 8, RegPairs::RegsBC)),
+			0x0C => Some(Instruction::INCs(1, 4, Regs::RegC)),
+			0x0D => Some(Instruction::DECs(1, 4, Regs::RegC)),
+			0x0E => Some(Instruction::LD(2, 8, Regs::RegC, Regs::ByteFromPC)),
+			0x12 => Some(Instruction::LD(1, 8, Regs::DEPointee, Regs::RegA)),
+			0x13 => Some(Instruction::INCss(1, 8, RegPairs::RegsDE)),
+			0x14 => Some(Instruction::INCs(1, 4, Regs::RegD)),
+			0x15 => Some(Instruction::DECs(1, 4, Regs::RegD)),
+			0x16 => Some(Instruction::LD(2, 8, Regs::RegD, Regs::ByteFromPC)),
 			0x19 => Some(Instruction::ADDHLss(1, 8, LargeArithmeticOperand::RegsDE)),
-			0x1B => Some(Instruction::DECss(1, 8, TargetRegPair::RegsDE)),
-			0x1C => Some(Instruction::INCs(1, 4, TargetReg::RegE)),
-			0x1D => Some(Instruction::DECs(1, 4, TargetReg::RegE)),
-			0x23 => Some(Instruction::INCss(1, 8, TargetRegPair::RegsHL)),
-			0x24 => Some(Instruction::INCs(1, 4, TargetReg::RegH)),
-			0x25 => Some(Instruction::DECs(1, 4, TargetReg::RegH)),
+			0x1A => Some(Instruction::LD(1, 8, Regs::RegA, Regs::DEPointee)),
+			0x1B => Some(Instruction::DECss(1, 8, RegPairs::RegsDE)),
+			0x1C => Some(Instruction::INCs(1, 4, Regs::RegE)),
+			0x1D => Some(Instruction::DECs(1, 4, Regs::RegE)),
+			0x1E => Some(Instruction::LD(2, 8, Regs::RegE, Regs::ByteFromPC)),
+			0x22 => Some(Instruction::LDI(1, 8, Regs::HLPointee, Regs::RegA)),
+			0x23 => Some(Instruction::INCss(1, 8, RegPairs::RegsHL)),
+			0x24 => Some(Instruction::INCs(1, 4, Regs::RegH)),
+			0x25 => Some(Instruction::DECs(1, 4, Regs::RegH)),
+			0x26 => Some(Instruction::LD(2, 8, Regs::RegH, Regs::ByteFromPC)),
 			0x27 => Some(Instruction::DAA(1, 4)),
 			0x29 => Some(Instruction::ADDHLss(1, 8, LargeArithmeticOperand::RegsHL)),
-			0x2B => Some(Instruction::DECss(1, 8, TargetRegPair::RegsHL)),
-			0x2C => Some(Instruction::INCs(1, 4, TargetReg::RegL)),
-			0x2D => Some(Instruction::DECs(1, 4, TargetReg::RegL)),
+			0x2A => Some(Instruction::LDI(1, 8, Regs::RegA, Regs::HLPointee)),
+			0x2B => Some(Instruction::DECss(1, 8, RegPairs::RegsHL)),
+			0x2C => Some(Instruction::INCs(1, 4, Regs::RegL)),
+			0x2D => Some(Instruction::DECs(1, 4, Regs::RegL)),
+			0x2E => Some(Instruction::LD(2, 8, Regs::RegL, Regs::ByteFromPC)),
 			0x2F => Some(Instruction::CPL(1, 4)),
-			0x33 => Some(Instruction::INCss(1, 8, TargetRegPair::RegSP)),
-			0x34 => Some(Instruction::INCs(1, 12, TargetReg::HLPointee)),
-			0x35 => Some(Instruction::DECs(1, 12, TargetReg::HLPointee)),
+			0x32 => Some(Instruction::LDD(1, 8, Regs::HLPointee, Regs::RegA)),
+			0x33 => Some(Instruction::INCss(1, 8, RegPairs::RegSP)),
+			0x34 => Some(Instruction::INCs(1, 12, Regs::HLPointee)),
+			0x35 => Some(Instruction::DECs(1, 12, Regs::HLPointee)),
+			0x36 => Some(Instruction::LD(2, 12, Regs::HLPointee, Regs::ByteFromPC)),
 			0x37 => Some(Instruction::SCF(1, 4)),
 			0x39 => Some(Instruction::ADDHLss(1, 8, LargeArithmeticOperand::RegSP)),
-			0x3B => Some(Instruction::DECss(1, 8, TargetRegPair::RegSP)),
-			0x3C => Some(Instruction::INCs(1, 4, TargetReg::RegA)),
-			0x3D => Some(Instruction::DECs(1, 4, TargetReg::RegA)),
+			0x3A => Some(Instruction::LDD(1, 8, Regs::RegA, Regs::HLPointee)),
+			0x3B => Some(Instruction::DECss(1, 8, RegPairs::RegSP)),
+			0x3C => Some(Instruction::INCs(1, 4, Regs::RegA)),
+			0x3D => Some(Instruction::DECs(1, 4, Regs::RegA)),
+			0x3E => Some(Instruction::LD(2, 8, Regs::RegA, Regs::ByteFromPC)),
 			0x3F => Some(Instruction::CCF(1, 4)),
+			0x40 => Some(Instruction::LD(1, 4, Regs::RegB, Regs::RegB)),
+			0x41 => Some(Instruction::LD(1, 4, Regs::RegB, Regs::RegC)),
+			0x42 => Some(Instruction::LD(1, 4, Regs::RegB, Regs::RegD)),
+			0x43 => Some(Instruction::LD(1, 4, Regs::RegB, Regs::RegE)),
+			0x44 => Some(Instruction::LD(1, 4, Regs::RegB, Regs::RegH)),
+			0x45 => Some(Instruction::LD(1, 4, Regs::RegB, Regs::RegL)),
+			0x46 => Some(Instruction::LD(1, 8, Regs::RegB, Regs::HLPointee)),
+			0x47 => Some(Instruction::LD(1, 4, Regs::RegB, Regs::RegA)),
+			0x48 => Some(Instruction::LD(1, 4, Regs::RegC, Regs::RegB)),
+			0x49 => Some(Instruction::LD(1, 4, Regs::RegC, Regs::RegC)),
+			0x4A => Some(Instruction::LD(1, 4, Regs::RegC, Regs::RegD)),
+			0x4B => Some(Instruction::LD(1, 4, Regs::RegC, Regs::RegE)),
+			0x4C => Some(Instruction::LD(1, 4, Regs::RegC, Regs::RegH)),
+			0x4D => Some(Instruction::LD(1, 4, Regs::RegC, Regs::RegL)),
+			0x4E => Some(Instruction::LD(1, 8, Regs::RegC, Regs::HLPointee)),
+			0x4F => Some(Instruction::LD(1, 4, Regs::RegC, Regs::RegA)),
+			0x50 => Some(Instruction::LD(1, 4, Regs::RegD, Regs::RegB)),
+			0x51 => Some(Instruction::LD(1, 4, Regs::RegD, Regs::RegC)),
+			0x52 => Some(Instruction::LD(1, 4, Regs::RegD, Regs::RegD)),
+			0x53 => Some(Instruction::LD(1, 4, Regs::RegD, Regs::RegE)),
+			0x54 => Some(Instruction::LD(1, 4, Regs::RegD, Regs::RegH)),
+			0x55 => Some(Instruction::LD(1, 4, Regs::RegD, Regs::RegL)),
+			0x56 => Some(Instruction::LD(1, 8, Regs::RegD, Regs::HLPointee)),
+			0x57 => Some(Instruction::LD(1, 4, Regs::RegD, Regs::RegA)),
+			0x58 => Some(Instruction::LD(1, 4, Regs::RegE, Regs::RegB)),
+			0x59 => Some(Instruction::LD(1, 4, Regs::RegE, Regs::RegC)),
+			0x5A => Some(Instruction::LD(1, 4, Regs::RegE, Regs::RegD)),
+			0x5B => Some(Instruction::LD(1, 4, Regs::RegE, Regs::RegE)),
+			0x5C => Some(Instruction::LD(1, 4, Regs::RegE, Regs::RegH)),
+			0x5D => Some(Instruction::LD(1, 4, Regs::RegE, Regs::RegL)),
+			0x5E => Some(Instruction::LD(1, 8, Regs::RegE, Regs::HLPointee)),
+			0x5F => Some(Instruction::LD(1, 4, Regs::RegE, Regs::RegA)),
+			0x60 => Some(Instruction::LD(1, 4, Regs::RegH, Regs::RegB)),
+			0x61 => Some(Instruction::LD(1, 4, Regs::RegH, Regs::RegC)),
+			0x62 => Some(Instruction::LD(1, 4, Regs::RegH, Regs::RegD)),
+			0x63 => Some(Instruction::LD(1, 4, Regs::RegH, Regs::RegE)),
+			0x64 => Some(Instruction::LD(1, 4, Regs::RegH, Regs::RegH)),
+			0x65 => Some(Instruction::LD(1, 4, Regs::RegH, Regs::RegL)),
+			0x66 => Some(Instruction::LD(1, 8, Regs::RegH, Regs::HLPointee)),
+			0x67 => Some(Instruction::LD(1, 4, Regs::RegH, Regs::RegA)),
+			0x68 => Some(Instruction::LD(1, 4, Regs::RegL, Regs::RegB)),
+			0x69 => Some(Instruction::LD(1, 4, Regs::RegL, Regs::RegC)),
+			0x6A => Some(Instruction::LD(1, 4, Regs::RegL, Regs::RegD)),
+			0x6B => Some(Instruction::LD(1, 4, Regs::RegL, Regs::RegE)),
+			0x6C => Some(Instruction::LD(1, 4, Regs::RegL, Regs::RegH)),
+			0x6D => Some(Instruction::LD(1, 4, Regs::RegL, Regs::RegL)),
+			0x6E => Some(Instruction::LD(1, 8, Regs::RegL, Regs::HLPointee)),
+			0x6F => Some(Instruction::LD(1, 4, Regs::RegL, Regs::RegA)),
+			0x70 => Some(Instruction::LD(1, 8, Regs::HLPointee, Regs::RegB)),
+			0x71 => Some(Instruction::LD(1, 8, Regs::HLPointee, Regs::RegC)),
+			0x72 => Some(Instruction::LD(1, 8, Regs::HLPointee, Regs::RegD)),
+			0x73 => Some(Instruction::LD(1, 8, Regs::HLPointee, Regs::RegE)),
+			0x74 => Some(Instruction::LD(1, 8, Regs::HLPointee, Regs::RegH)),
+			0x75 => Some(Instruction::LD(1, 8, Regs::HLPointee, Regs::RegL)),
+			0x77 => Some(Instruction::LD(1, 8, Regs::HLPointee, Regs::RegA)),
+			0x78 => Some(Instruction::LD(1, 4, Regs::RegA, Regs::RegB)),
+			0x79 => Some(Instruction::LD(1, 4, Regs::RegA, Regs::RegC)),
+			0x7A => Some(Instruction::LD(1, 4, Regs::RegA, Regs::RegD)),
+			0x7B => Some(Instruction::LD(1, 4, Regs::RegA, Regs::RegE)),
+			0x7C => Some(Instruction::LD(1, 4, Regs::RegA, Regs::RegH)),
+			0x7D => Some(Instruction::LD(1, 4, Regs::RegA, Regs::RegL)),
+			0x7E => Some(Instruction::LD(1, 8, Regs::RegA, Regs::HLPointee)),
+			0x7F => Some(Instruction::LD(1, 4, Regs::RegA, Regs::RegA)),
 			0x80 => Some(Instruction::ADDAs(1, 4, ArithmeticOperand::RegB)),
 			0x81 => Some(Instruction::ADDAs(1, 4, ArithmeticOperand::RegC)),
 			0x82 => Some(Instruction::ADDAs(1, 4, ArithmeticOperand::RegD)),
@@ -148,10 +230,16 @@ impl Instruction {
 			0xCE => Some(Instruction::ADCAs(2, 8, ArithmeticOperand::ByteFromPC)),
 			0xD6 => Some(Instruction::SUBs(2, 8, ArithmeticOperand::ByteFromPC)),
 			0xDE => Some(Instruction::SBCAs(2, 8, ArithmeticOperand::ByteFromPC)),
+			0xE0 => Some(Instruction::LD(2, 12, Regs::UpperRamOffsetFromPC, Regs::RegA)),
+			0xE2 => Some(Instruction::LD(1, 8, Regs::UpperRamOffsetFromRegC, Regs::RegA)),
 			0xE6 => Some(Instruction::ANDs(2, 8, ArithmeticOperand::ByteFromPC)),
 			0xE8 => Some(Instruction::ADDSPe(2, 16)),
+			0xEA => Some(Instruction::LD(3, 16, Regs::BytesFromPCPointee, Regs::RegA)),
 			0xEE => Some(Instruction::XORs(2, 8, ArithmeticOperand::ByteFromPC)),
+			0xF0 => Some(Instruction::LD(2, 12, Regs::RegA, Regs::UpperRamOffsetFromPC)),
+			0xF2 => Some(Instruction::LD(1, 8, Regs::RegA, Regs::UpperRamOffsetFromRegC)),
 			0xF6 => Some(Instruction::ORs(2, 8, ArithmeticOperand::ByteFromPC)),
+			0xFA => Some(Instruction::LD(3, 16, Regs::RegA, Regs::BytesFromPCPointee)),
 			0xFE => Some(Instruction::CPs(2, 8, ArithmeticOperand::ByteFromPC)),
 			_ => None
 		}
@@ -180,49 +268,87 @@ impl Cpu {
 			LargeArithmeticOperand::RegSP => self.registers.stack_pointer,
 		}
 	}
-	pub fn get_target_reg_value(&self, target: TargetReg) -> u8 {
-		match target {
-			TargetReg::RegA => self.registers.a,
-			TargetReg::RegB => self.registers.b,
-			TargetReg::RegC => self.registers.c,
-			TargetReg::RegD => self.registers.d,
-			TargetReg::RegE => self.registers.e,
-			TargetReg::RegH => self.registers.h,
-			TargetReg::RegL => self.registers.l,
-			TargetReg::HLPointee => self.registers.get_hl_pointee(&self.memory_bus),
+	pub fn get_reg_value(&mut self, reg: Regs) -> u8 {
+		match reg {
+			Regs::RegA => self.registers.a,
+			Regs::RegB => self.registers.b,
+			Regs::RegC => self.registers.c,
+			Regs::RegD => self.registers.d,
+			Regs::RegE => self.registers.e,
+			Regs::RegH => self.registers.h,
+			Regs::RegL => self.registers.l,
+			Regs::HLPointee => self.registers.get_hl_pointee(&self.memory_bus),
+			Regs::BCPointee => self.registers.get_bc_pointee(&self.memory_bus),
+			Regs::DEPointee => self.registers.get_de_pointee(&self.memory_bus),
+			Regs::BytesFromPCPointee => {
+				let address = self.fetch_pc() as u16 | ((self.fetch_pc() as u16) << 8);
+				self.memory_bus.read_byte(address)
+			}
+			Regs::UpperRamOffsetFromPC => {
+				let address = 0xFF00 + self.fetch_pc() as u16;
+				self.memory_bus.read_byte(address)
+			}
+			Regs::UpperRamOffsetFromRegC => self.memory_bus.read_byte(0xFF00 + self.registers.c as u16),
+			Regs::ByteFromPC => self.fetch_pc()
 		}
 	}
-	pub fn set_target_reg_value(&mut self, target: TargetReg, data: u8) {
-		match target {
-			TargetReg::RegA => {self.registers.a = data}
-			TargetReg::RegB => {self.registers.b = data}
-			TargetReg::RegC => {self.registers.c = data}
-			TargetReg::RegD => {self.registers.d = data}
-			TargetReg::RegE => {self.registers.e = data}
-			TargetReg::RegH => {self.registers.h = data}
-			TargetReg::RegL => {self.registers.l = data}
-			TargetReg::HLPointee => {self.registers.set_hl_pointee(&mut self.memory_bus, data)}
+	pub fn set_reg_value(&mut self, reg: Regs, data: u8) {
+		match reg {
+			Regs::RegA => {self.registers.a = data}
+			Regs::RegB => {self.registers.b = data}
+			Regs::RegC => {self.registers.c = data}
+			Regs::RegD => {self.registers.d = data}
+			Regs::RegE => {self.registers.e = data}
+			Regs::RegH => {self.registers.h = data}
+			Regs::RegL => {self.registers.l = data}
+			Regs::HLPointee => {self.registers.set_hl_pointee(&mut self.memory_bus, data)}
+			Regs::BCPointee => {self.registers.set_bc_pointee(&mut self.memory_bus, data)},
+			Regs::DEPointee => {self.registers.set_de_pointee(&mut self.memory_bus, data)},
+			Regs::BytesFromPCPointee => {
+				let address = self.fetch_pc() as u16 | ((self.fetch_pc() as u16) << 8);
+				self.memory_bus.write_byte(address, data)
+			}
+			Regs::UpperRamOffsetFromPC => {
+				let address = 0xFF00 + self.fetch_pc() as u16;
+				self.memory_bus.write_byte(address, data)
+			}
+			Regs::UpperRamOffsetFromRegC => {self.memory_bus.write_byte(0xFF00 + self.registers.c as u16, data)},
+			Regs::ByteFromPC => {println!("SHOULD NEVER HAPPEN")}
 		}
 	}
-	pub fn set_target_pair_value(&mut self, operand: TargetRegPair, data: u16) {
-		match operand {
-			TargetRegPair::RegsBC => {self.registers.set_bc(data)}
-			TargetRegPair::RegsDE => {self.registers.set_de(data)}
-			TargetRegPair::RegsHL => {self.registers.set_hl(data)}
-			TargetRegPair::RegSP => {self.registers.stack_pointer = data}
+	pub fn set_reg_pair_value(&mut self, reg_pair: RegPairs, data: u16) {
+		match reg_pair {
+			RegPairs::RegsBC => {self.registers.set_bc(data)}
+			RegPairs::RegsDE => {self.registers.set_de(data)}
+			RegPairs::RegsHL => {self.registers.set_hl(data)}
+			RegPairs::RegSP => {self.registers.stack_pointer = data}
 		}
 	}
-	pub fn get_target_pair_value(&self, operand: TargetRegPair) -> u16 {
-		match operand {
-			TargetRegPair::RegsBC => self.registers.get_bc(),
-			TargetRegPair::RegsDE => self.registers.get_de(),
-			TargetRegPair::RegsHL => self.registers.get_hl(),
-			TargetRegPair::RegSP => self.registers.stack_pointer
+	pub fn get_reg_pair_value(&self, reg_pair: RegPairs) -> u16 {
+		match reg_pair {
+			RegPairs::RegsBC => self.registers.get_bc(),
+			RegPairs::RegsDE => self.registers.get_de(),
+			RegPairs::RegsHL => self.registers.get_hl(),
+			RegPairs::RegSP => self.registers.stack_pointer
 		}
 	}
 	pub fn execute_op(&mut self, instruction: Instruction) {
 		match instruction {
 			Instruction::NOP(_, _) => {}
+			Instruction::LD(_, _, target, src) => {
+				let data = self.get_reg_value(src);
+				self.set_reg_value(target, data);
+			}
+			Instruction::LDI(_, _, target, src) => {
+				let data = self.get_reg_value(src);
+				self.set_reg_value(target, data);
+				self.registers.set_hl(self.registers.get_hl().overflowing_add(1).0);
+			}
+			Instruction::LDD(_, _, target, src) => {
+				let data = self.get_reg_value(src);
+				self.set_reg_value(target, data);
+				self.registers.set_hl(self.registers.get_hl().overflowing_sub(1).0);
+			}
 			Instruction::ADDAs(_, _, _operand) | Instruction::ADCAs(_, _, _operand) => {
 				let reg_a_content = self.registers.a as u16;
 				let operand_val = self.get_operand_value(_operand) as u16;
@@ -281,24 +407,24 @@ impl Cpu {
 				self.registers.f.carry = r & 0x100 != 0;
 			}
 			Instruction::INCs(_, _, _target) => {
-				let target_value = self.get_target_reg_value(_target);
+				let target_value = self.get_reg_value(_target);
 				self.registers.f.zero = target_value == 0xFF;
 				self.registers.f.substract = false;
 				self.registers.f.half_carry = (target_value & 0xF) + 1 >= 0x10;
-				self.set_target_reg_value(_target, target_value.overflowing_add(1).0);
+				self.set_reg_value(_target, target_value.overflowing_add(1).0);
 			}
 			Instruction::DECs(_, _, _target) => {
-				let target_value = self.get_target_reg_value(_target);
+				let target_value = self.get_reg_value(_target);
 				self.registers.f.zero = target_value == 0x01;
 				self.registers.f.substract = true;
 				self.registers.f.half_carry = target_value & 0xF < 1;
-				self.set_target_reg_value(_target, target_value.overflowing_sub(1).0);
+				self.set_reg_value(_target, target_value.overflowing_sub(1).0);
 			}
 			Instruction::INCss(_, _, _target) => {
-				self.set_target_pair_value(_target, self.get_target_pair_value(_target).overflowing_add(1).0);
+				self.set_reg_pair_value(_target, self.get_reg_pair_value(_target).overflowing_add(1).0);
 			}
 			Instruction::DECss(_, _, _target) => {
-				self.set_target_pair_value(_target, self.get_target_pair_value(_target).overflowing_sub(1).0);
+				self.set_reg_pair_value(_target, self.get_reg_pair_value(_target).overflowing_sub(1).0);
 			}
 			Instruction::ADDHLss(_, _, _operand) => {
 				let hl_value = self.registers.get_hl();
