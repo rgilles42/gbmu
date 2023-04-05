@@ -262,9 +262,9 @@ impl Cpu {
 	}
 	pub fn get_large_operand_value(&mut self, operand: LargeArithmeticOperand) -> u16 {
 		match operand {
-			LargeArithmeticOperand::RegsBC => self.registers.get_bc(),
-			LargeArithmeticOperand::RegsDE => self.registers.get_de(),
-			LargeArithmeticOperand::RegsHL => self.registers.get_hl(),
+			LargeArithmeticOperand::RegsBC => self.registers.get_bc_big_endian(),
+			LargeArithmeticOperand::RegsDE => self.registers.get_de_big_endian(),
+			LargeArithmeticOperand::RegsHL => self.registers.get_hl_big_endian(),
 			LargeArithmeticOperand::RegSP => self.registers.stack_pointer,
 		}
 	}
@@ -318,17 +318,17 @@ impl Cpu {
 	}
 	pub fn set_reg_pair_value(&mut self, reg_pair: RegPairs, data: u16) {
 		match reg_pair {
-			RegPairs::RegsBC => {self.registers.set_bc(data)}
-			RegPairs::RegsDE => {self.registers.set_de(data)}
-			RegPairs::RegsHL => {self.registers.set_hl(data)}
+			RegPairs::RegsBC => {self.registers.set_bc_big_endian(data)}
+			RegPairs::RegsDE => {self.registers.set_de_big_endian(data)}
+			RegPairs::RegsHL => {self.registers.set_hl_big_endian(data)}
 			RegPairs::RegSP => {self.registers.stack_pointer = data}
 		}
 	}
 	pub fn get_reg_pair_value(&self, reg_pair: RegPairs) -> u16 {
 		match reg_pair {
-			RegPairs::RegsBC => self.registers.get_bc(),
-			RegPairs::RegsDE => self.registers.get_de(),
-			RegPairs::RegsHL => self.registers.get_hl(),
+			RegPairs::RegsBC => self.registers.get_bc_big_endian(),
+			RegPairs::RegsDE => self.registers.get_de_big_endian(),
+			RegPairs::RegsHL => self.registers.get_hl_big_endian(),
 			RegPairs::RegSP => self.registers.stack_pointer
 		}
 	}
@@ -342,12 +342,12 @@ impl Cpu {
 			Instruction::LDI(_, _, target, src) => {
 				let data = self.get_reg_value(src);
 				self.set_reg_value(target, data);
-				self.registers.set_hl(self.registers.get_hl().overflowing_add(1).0);
+				self.registers.set_hl_big_endian(self.registers.get_hl_big_endian().overflowing_add(1).0);
 			}
 			Instruction::LDD(_, _, target, src) => {
 				let data = self.get_reg_value(src);
 				self.set_reg_value(target, data);
-				self.registers.set_hl(self.registers.get_hl().overflowing_sub(1).0);
+				self.registers.set_hl_big_endian(self.registers.get_hl_big_endian().overflowing_sub(1).0);
 			}
 			Instruction::ADDAs(_, _, _operand) | Instruction::ADCAs(_, _, _operand) => {
 				let reg_a_content = self.registers.a as u16;
@@ -427,13 +427,13 @@ impl Cpu {
 				self.set_reg_pair_value(_target, self.get_reg_pair_value(_target).overflowing_sub(1).0);
 			}
 			Instruction::ADDHLss(_, _, _operand) => {
-				let hl_value = self.registers.get_hl();
+				let hl_value = self.registers.get_hl_big_endian();
 				let operand_value = self.get_large_operand_value(_operand);
 				let r = hl_value.overflowing_add(operand_value).0;
 				self.registers.f.substract = false;
 				self.registers.f.half_carry = (hl_value & 0x0FFF) + (operand_value & 0x0FFF) >= 0x1000;
 				self.registers.f.carry = r < hl_value;
-				self.registers.set_hl(r);
+				self.registers.set_hl_big_endian(r);
 			}
 			Instruction::ADDSPe(_, _) => {
 				let sp_value = self.registers.stack_pointer;
@@ -518,9 +518,9 @@ use super::{Instruction, ArithmeticOperand};
 	}
 	fn test_addhlss(cpu: &mut Cpu, init_hl_value: u16, expected_res: u16, expected_flag_reg: FlagsRegister) {
 		cpu.current_op = Some(Instruction::ADDHLss(1, 8, LargeArithmeticOperand::RegsHL));
-		cpu.registers.set_hl(init_hl_value);
+		cpu.registers.set_hl_big_endian(init_hl_value);
 		cpu.exec_current_op();
-		assert_eq!(cpu.registers.get_hl(), expected_res);
+		assert_eq!(cpu.registers.get_hl_big_endian(), expected_res);
 		assert_eq!(cpu.registers.f, expected_flag_reg);
 	}
 	fn test_addspe(cpu: &mut Cpu, init_sp_value: u16, operand: i8, expected_res: u16, expected_flag_reg: FlagsRegister) {
