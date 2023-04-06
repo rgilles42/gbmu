@@ -65,7 +65,7 @@ pub enum Instruction {
 }
 
 impl Instruction {
-	pub fn from_opcode(opcode: u8) -> Option<Instruction> {
+	pub fn from_opcode(opcode: u8, cpu: &mut Cpu) -> Option<Instruction> {
 		match opcode {
 			0x00 => Some(Instruction::NOP(1, 4)),
 			0x01 => Some(Instruction::LD16(3, 12, RegPairs::RegsBC, RegPairs::BytesFromPC)),
@@ -263,6 +263,7 @@ impl Instruction {
 			0xC5 => Some(Instruction::PUSH(1, 16, RegPairs::RegsBC)),
 			0xC6 => Some(Instruction::ADDAs(2, 8, ArithmeticOperand::ByteFromPC)),
 			0xCA => Some(Instruction::JPfnn(3, 12, JumpCondition::Zero)),
+			0xCB => Self::from_cb_opcode(cpu.fetch_pc()),
 			0xCE => Some(Instruction::ADCAs(2, 8, ArithmeticOperand::ByteFromPC)),
 			0xD1 => Some(Instruction::POP(1, 12, RegPairs::RegsDE)),
 			0xD2 => Some(Instruction::JPfnn(3, 12, JumpCondition::NotCarry)),
@@ -289,6 +290,11 @@ impl Instruction {
 			0xFA => Some(Instruction::LD(3, 16, Regs::RegA, Regs::BytesFromPCPointee)),
 			0xFE => Some(Instruction::CPs(2, 8, ArithmeticOperand::ByteFromPC)),
 			_ => None
+		}
+	}
+	pub fn from_cb_opcode(opcode: u8) -> Option<Instruction> {
+		match opcode {
+			_ => Some(Instruction::NOP(1, 4))
 		}
 	}
 }

@@ -31,7 +31,7 @@ impl Cpu {
 		self.current_op = self.next_op;
 	}
 	fn fetch_next_opcode(&mut self) {
-		self.next_op = Instruction::from_opcode(self.fetch_pc());
+		self.next_op = Instruction::from_opcode(self.fetch_pc(), self);
 	}
 	fn exec_current_op(&mut self) {
 		self.execute_op(
@@ -44,7 +44,7 @@ impl Cpu {
 	}
 	fn fetch_pc(&mut self) -> u8 {
 		let data = self.memory_bus.read_byte(self.registers.program_counter);
-		self.registers.program_counter += 1;
+		self.registers.program_counter = self.registers.program_counter.overflowing_add(1).0;
 		data
 	}
 }
