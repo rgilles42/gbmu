@@ -21,6 +21,11 @@ pub enum RegPairs{
 }
 
 #[derive(Debug, Clone, Copy)]
+pub enum JumpCondition{
+	NotZero, Zero, NotCarry, Carry
+}
+
+#[derive(Debug, Clone, Copy)]
 pub enum Instruction {
 	LD(InstrLength, InstrCycles, Regs, Regs),
 	LDI(InstrLength, InstrCycles, Regs, Regs),
@@ -52,6 +57,11 @@ pub enum Instruction {
 	CCF(InstrLength, InstrCycles),
 	SCF(InstrLength, InstrCycles),
 	NOP(InstrLength, InstrCycles),
+	JPnn(InstrLength, InstrCycles),
+	JPHL(InstrLength, InstrCycles),
+	JPfnn(InstrLength, InstrCycles, JumpCondition),
+	JR(InstrLength, InstrCycles),
+	JRf(InstrLength, InstrCycles, JumpCondition)
 }
 
 impl Instruction {
@@ -80,7 +90,9 @@ impl Instruction {
 			0x15 => Some(Instruction::DECs(1, 4, Regs::RegD)),
 			0x16 => Some(Instruction::LD(2, 8, Regs::RegD, Regs::ByteFromPC)),
 			0x17 => Some(Instruction::RLA(1, 4)),
+			0x18 => Some(Instruction::JR(2, 12)),
 			0x19 => Some(Instruction::ADDHLss(1, 8, LargeArithmeticOperand::RegsDE)),
+			0x20 => Some(Instruction::JRf(2, 8, JumpCondition::NotZero)),
 			0x1A => Some(Instruction::LD(1, 8, Regs::RegA, Regs::DEPointee)),
 			0x1B => Some(Instruction::DECss(1, 8, RegPairs::RegsDE)),
 			0x1C => Some(Instruction::INCs(1, 4, Regs::RegE)),
@@ -94,7 +106,9 @@ impl Instruction {
 			0x25 => Some(Instruction::DECs(1, 4, Regs::RegH)),
 			0x26 => Some(Instruction::LD(2, 8, Regs::RegH, Regs::ByteFromPC)),
 			0x27 => Some(Instruction::DAA(1, 4)),
+			0x28 => Some(Instruction::JRf(2, 8, JumpCondition::Zero)),
 			0x29 => Some(Instruction::ADDHLss(1, 8, LargeArithmeticOperand::RegsHL)),
+			0x30 => Some(Instruction::JRf(2, 8, JumpCondition::NotCarry)),
 			0x2A => Some(Instruction::LDI(1, 8, Regs::RegA, Regs::HLPointee)),
 			0x2B => Some(Instruction::DECss(1, 8, RegPairs::RegsHL)),
 			0x2C => Some(Instruction::INCs(1, 4, Regs::RegL)),
@@ -108,6 +122,7 @@ impl Instruction {
 			0x35 => Some(Instruction::DECs(1, 12, Regs::HLPointee)),
 			0x36 => Some(Instruction::LD(2, 12, Regs::HLPointee, Regs::ByteFromPC)),
 			0x37 => Some(Instruction::SCF(1, 4)),
+			0x38 => Some(Instruction::JRf(2, 8, JumpCondition::Carry)),
 			0x39 => Some(Instruction::ADDHLss(1, 8, LargeArithmeticOperand::RegSP)),
 			0x3A => Some(Instruction::LDD(1, 8, Regs::RegA, Regs::HLPointee)),
 			0x3B => Some(Instruction::DECss(1, 8, RegPairs::RegSP)),
@@ -243,12 +258,17 @@ impl Instruction {
 			0xBE => Some(Instruction::CPs(1, 8, ArithmeticOperand::HLPointee)),
 			0xBF => Some(Instruction::CPs(1, 4, ArithmeticOperand::RegA)),
 			0xC1 => Some(Instruction::POP(1, 12, RegPairs::RegsBC)),
+			0xC2 => Some(Instruction::JPfnn(3, 12, JumpCondition::NotZero)),
+			0xC3 => Some(Instruction::JPnn(3, 16)),
 			0xC5 => Some(Instruction::PUSH(1, 16, RegPairs::RegsBC)),
 			0xC6 => Some(Instruction::ADDAs(2, 8, ArithmeticOperand::ByteFromPC)),
+			0xCA => Some(Instruction::JPfnn(3, 12, JumpCondition::Zero)),
 			0xCE => Some(Instruction::ADCAs(2, 8, ArithmeticOperand::ByteFromPC)),
 			0xD1 => Some(Instruction::POP(1, 12, RegPairs::RegsDE)),
+			0xD2 => Some(Instruction::JPfnn(3, 12, JumpCondition::NotCarry)),
 			0xD5 => Some(Instruction::PUSH(1, 16, RegPairs::RegsDE)),
 			0xD6 => Some(Instruction::SUBs(2, 8, ArithmeticOperand::ByteFromPC)),
+			0xDA => Some(Instruction::JPfnn(3, 12, JumpCondition::Carry)),
 			0xDE => Some(Instruction::SBCAs(2, 8, ArithmeticOperand::ByteFromPC)),
 			0xE0 => Some(Instruction::LD(2, 12, Regs::UpperRamOffsetFromPC, Regs::RegA)),
 			0xE1 => Some(Instruction::POP(1, 12, RegPairs::RegsHL)),
@@ -256,6 +276,7 @@ impl Instruction {
 			0xE5 => Some(Instruction::PUSH(1, 16, RegPairs::RegsHL)),
 			0xE6 => Some(Instruction::ANDs(2, 8, ArithmeticOperand::ByteFromPC)),
 			0xE8 => Some(Instruction::ADDSPe(2, 16)),
+			0xE9 => Some(Instruction::JPHL(1, 4)),
 			0xEA => Some(Instruction::LD(3, 16, Regs::BytesFromPCPointee, Regs::RegA)),
 			0xEE => Some(Instruction::XORs(2, 8, ArithmeticOperand::ByteFromPC)),
 			0xF0 => Some(Instruction::LD(2, 12, Regs::RegA, Regs::UpperRamOffsetFromPC)),
@@ -574,7 +595,7 @@ impl Cpu {
 				self.registers.f.substract = false;
 				self.registers.f.half_carry = false;
 				self.registers.a = reg_content as u8;
-			},
+			}
 			Instruction::RRCA(_, _) => {
 				self.registers.f.zero = false;
 				self.registers.f.substract = false;
@@ -586,7 +607,7 @@ impl Cpu {
 					reg_content += 0x8000;
 				}
 				self.registers.a = (reg_content >> 8) as u8;
-			},
+			}
 			Instruction::RRA(_, _) => {
 				let mut reg_content = (self.registers.a as u16) << 7;
 				reg_content += if self.registers.f.carry {0x8000} else {0};
@@ -595,7 +616,55 @@ impl Cpu {
 				self.registers.f.substract = false;
 				self.registers.f.half_carry = false;
 				self.registers.a = (reg_content >> 8) as u8;
-			},
+			}
+			Instruction::JPnn(_, _) => self.registers.program_counter = self.get_reg_pair_big_endian_value(RegPairs::BytesFromPC),
+			Instruction::JPHL(_, _) => self.registers.program_counter = self.registers.get_hl_big_endian(),
+			Instruction::JPfnn(len, _, condition) => {
+				let destination = self.get_reg_pair_big_endian_value(RegPairs::BytesFromPC);
+				match condition {
+					JumpCondition::NotZero => {
+						self.current_op = Some(Instruction::JPfnn(len, 16, condition));
+						if !self.registers.f.zero {self.registers.program_counter = destination};
+					}
+					JumpCondition::Zero => {
+						self.current_op = Some(Instruction::JPfnn(len, 16, condition));
+						if self.registers.f.zero {self.registers.program_counter = destination};
+					}
+					JumpCondition::NotCarry => {
+						self.current_op = Some(Instruction::JPfnn(len, 16, condition));
+						if !self.registers.f.carry {self.registers.program_counter = destination};
+					}
+					JumpCondition::Carry => {
+						self.current_op = Some(Instruction::JPfnn(len, 16, condition));
+						if self.registers.f.carry {self.registers.program_counter = destination};
+					}
+				}
+			}
+			Instruction::JR(_, _) => {
+				let operand_value = self.fetch_pc() as i8 as u16;
+				self.registers.program_counter = self.registers.program_counter.overflowing_add(operand_value).0;
+			}
+			Instruction::JRf(len, _, condition) => {
+				let operand_value = self.fetch_pc() as i8 as u16;
+				match condition {
+					JumpCondition::NotZero => {
+						self.current_op = Some(Instruction::JRf(len, 12, condition));
+						if !self.registers.f.zero {self.registers.program_counter = self.registers.program_counter.overflowing_add(operand_value).0};
+					}
+					JumpCondition::Zero => {
+						self.current_op = Some(Instruction::JRf(len, 12, condition));
+						if self.registers.f.zero {self.registers.program_counter = self.registers.program_counter.overflowing_add(operand_value).0};
+					}
+					JumpCondition::NotCarry => {
+						self.current_op = Some(Instruction::JRf(len, 12, condition));
+						if !self.registers.f.carry {self.registers.program_counter = self.registers.program_counter.overflowing_add(operand_value).0};
+					}
+					JumpCondition::Carry => {
+						self.current_op = Some(Instruction::JRf(len, 12, condition));
+						if self.registers.f.carry {self.registers.program_counter = self.registers.program_counter.overflowing_add(operand_value).0};
+					}
+				}
+			}
 		}
 	}
 }
