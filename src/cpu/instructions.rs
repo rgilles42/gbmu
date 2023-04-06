@@ -26,16 +26,9 @@ pub enum Instruction {
 	LDI(InstrLength, InstrCycles, Regs, Regs),
 	LDD(InstrLength, InstrCycles, Regs, Regs),
 	LD16(InstrLength, InstrCycles, RegPairs, RegPairs),
-	LDHLSPe(InstrLength, InstrCycles),
 	PUSH(InstrLength, InstrCycles, RegPairs),
 	POP(InstrLength, InstrCycles, RegPairs),
-	INCs(InstrLength, InstrCycles, Regs),
-	INCss(InstrLength, InstrCycles, RegPairs),
-	DECs(InstrLength, InstrCycles, Regs),
-	DECss(InstrLength, InstrCycles, RegPairs),
 	ADDAs(InstrLength, InstrCycles, ArithmeticOperand),
-	ADDHLss(InstrLength, InstrCycles, LargeArithmeticOperand),
-	ADDSPe(InstrLength, InstrCycles),
 	ADCAs(InstrLength, InstrCycles, ArithmeticOperand),
 	SUBs(InstrLength, InstrCycles, ArithmeticOperand),
 	SBCAs(InstrLength, InstrCycles, ArithmeticOperand),
@@ -43,10 +36,21 @@ pub enum Instruction {
 	XORs(InstrLength, InstrCycles, ArithmeticOperand),
 	ORs(InstrLength, InstrCycles, ArithmeticOperand),
 	CPs(InstrLength, InstrCycles, ArithmeticOperand),
-	CCF(InstrLength, InstrCycles),
-	SCF(InstrLength, InstrCycles),
+	INCs(InstrLength, InstrCycles, Regs),
+	DECs(InstrLength, InstrCycles, Regs),
 	DAA(InstrLength, InstrCycles),
 	CPL(InstrLength, InstrCycles),
+	ADDHLss(InstrLength, InstrCycles, LargeArithmeticOperand),
+	INCss(InstrLength, InstrCycles, RegPairs),
+	DECss(InstrLength, InstrCycles, RegPairs),
+	ADDSPe(InstrLength, InstrCycles),
+	LDHLSPe(InstrLength, InstrCycles),
+	RLCA(InstrLength, InstrCycles),
+	RLA(InstrLength, InstrCycles),
+	RRCA(InstrLength, InstrCycles),
+	RRA(InstrLength, InstrCycles),
+	CCF(InstrLength, InstrCycles),
+	SCF(InstrLength, InstrCycles),
 	NOP(InstrLength, InstrCycles),
 }
 
@@ -60,6 +64,7 @@ impl Instruction {
 			0x04 => Some(Instruction::INCs(1, 4, Regs::RegB)),
 			0x05 => Some(Instruction::DECs(1, 4, Regs::RegB)),
 			0x06 => Some(Instruction::LD(2, 8, Regs::RegB, Regs::ByteFromPC)),
+			0x07 => Some(Instruction::RLCA(1, 4)),
 			0x08 => Some(Instruction::LD16(3, 20, RegPairs::BytesFromPCPointee, RegPairs::RegSP)),
 			0x09 => Some(Instruction::ADDHLss(1, 8, LargeArithmeticOperand::RegsBC)),
 			0x0A => Some(Instruction::LD(1, 8, Regs::RegA, Regs::BCPointee)),
@@ -67,18 +72,21 @@ impl Instruction {
 			0x0C => Some(Instruction::INCs(1, 4, Regs::RegC)),
 			0x0D => Some(Instruction::DECs(1, 4, Regs::RegC)),
 			0x0E => Some(Instruction::LD(2, 8, Regs::RegC, Regs::ByteFromPC)),
+			0x0F => Some(Instruction::RRCA(1, 4)),
 			0x11 => Some(Instruction::LD16(3, 12, RegPairs::RegsDE, RegPairs::BytesFromPC)),
 			0x12 => Some(Instruction::LD(1, 8, Regs::DEPointee, Regs::RegA)),
 			0x13 => Some(Instruction::INCss(1, 8, RegPairs::RegsDE)),
 			0x14 => Some(Instruction::INCs(1, 4, Regs::RegD)),
 			0x15 => Some(Instruction::DECs(1, 4, Regs::RegD)),
 			0x16 => Some(Instruction::LD(2, 8, Regs::RegD, Regs::ByteFromPC)),
+			0x17 => Some(Instruction::RLA(1, 4)),
 			0x19 => Some(Instruction::ADDHLss(1, 8, LargeArithmeticOperand::RegsDE)),
 			0x1A => Some(Instruction::LD(1, 8, Regs::RegA, Regs::DEPointee)),
 			0x1B => Some(Instruction::DECss(1, 8, RegPairs::RegsDE)),
 			0x1C => Some(Instruction::INCs(1, 4, Regs::RegE)),
 			0x1D => Some(Instruction::DECs(1, 4, Regs::RegE)),
 			0x1E => Some(Instruction::LD(2, 8, Regs::RegE, Regs::ByteFromPC)),
+			0x1F => Some(Instruction::RRA(1, 4)),
 			0x21 => Some(Instruction::LD16(3, 12, RegPairs::RegsHL, RegPairs::BytesFromPC)),
 			0x22 => Some(Instruction::LDI(1, 8, Regs::HLPointee, Regs::RegA)),
 			0x23 => Some(Instruction::INCss(1, 8, RegPairs::RegsHL)),
@@ -546,6 +554,48 @@ impl Cpu {
 				self.registers.f.substract = true;
 				self.registers.f.half_carry = true;
 			}
+			Instruction::RLCA(_, _) => {
+				self.registers.f.zero = false;
+				self.registers.f.substract = false;
+				self.registers.f.half_carry = false;
+				self.registers.f.carry = false;
+				let mut reg_content = (self.registers.a as u16) << 1;
+				if (reg_content & 0x0100) != 0 {
+					self.registers.f.carry = true;
+					reg_content += 1;
+				}
+				self.registers.a = reg_content as u8;
+			}
+			Instruction::RLA(_, _) => {
+				let mut reg_content = (self.registers.a as u16) << 1;
+				reg_content += if self.registers.f.carry {1} else {0};
+				self.registers.f.carry = (reg_content & 0x0100) != 0;
+				self.registers.f.zero = false;
+				self.registers.f.substract = false;
+				self.registers.f.half_carry = false;
+				self.registers.a = reg_content as u8;
+			},
+			Instruction::RRCA(_, _) => {
+				self.registers.f.zero = false;
+				self.registers.f.substract = false;
+				self.registers.f.half_carry = false;
+				self.registers.f.carry = false;
+				let mut reg_content = (self.registers.a as u16) << 7;
+				if (reg_content & 0x0080) != 0 {
+					self.registers.f.carry = true;
+					reg_content += 0x8000;
+				}
+				self.registers.a = (reg_content >> 8) as u8;
+			},
+			Instruction::RRA(_, _) => {
+				let mut reg_content = (self.registers.a as u16) << 7;
+				reg_content += if self.registers.f.carry {0x8000} else {0};
+				self.registers.f.carry = (reg_content & 0x0080) != 0;
+				self.registers.f.zero = false;
+				self.registers.f.substract = false;
+				self.registers.f.half_carry = false;
+				self.registers.a = (reg_content >> 8) as u8;
+			},
 		}
 	}
 }
