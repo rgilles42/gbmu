@@ -17,13 +17,14 @@ pub enum Regs{
 }
 #[derive(Debug, Clone, Copy)]
 pub enum RegPairs{
-	RegsBC, RegsDE, RegsHL, RegSP
+	RegsBC, RegsDE, RegsHL, RegSP, BytesFromPCPointee, BytesFromPC
 }
 
 #[derive(Debug, Clone, Copy)]
 pub enum Instruction {
 	NOP(InstrLength, InstrCycles),
 	LD(InstrLength, InstrCycles, Regs, Regs),
+	LD16(InstrLength, InstrCycles, RegPairs, RegPairs),
 	LDI(InstrLength, InstrCycles, Regs, Regs),
 	LDD(InstrLength, InstrCycles, Regs, Regs),
 	INCs(InstrLength, InstrCycles, Regs),
@@ -50,17 +51,20 @@ impl Instruction {
 	pub fn from_opcode(opcode: u8) -> Option<Instruction> {
 		match opcode {
 			0x00 => Some(Instruction::NOP(1, 4)),
+			0x01 => Some(Instruction::LD16(3, 12, RegPairs::RegsBC, RegPairs::BytesFromPC)),
 			0x02 => Some(Instruction::LD(1, 8, Regs::BCPointee, Regs::RegA)),
 			0x03 => Some(Instruction::INCss(1, 8, RegPairs::RegsBC)),
 			0x04 => Some(Instruction::INCs(1, 4, Regs::RegB)),
 			0x05 => Some(Instruction::DECs(1, 4, Regs::RegB)),
 			0x06 => Some(Instruction::LD(2, 8, Regs::RegB, Regs::ByteFromPC)),
+			0x08 => Some(Instruction::LD16(3, 20, RegPairs::BytesFromPCPointee, RegPairs::RegSP)),
 			0x09 => Some(Instruction::ADDHLss(1, 8, LargeArithmeticOperand::RegsBC)),
 			0x0A => Some(Instruction::LD(1, 8, Regs::RegA, Regs::BCPointee)),
 			0x0B => Some(Instruction::DECss(1, 8, RegPairs::RegsBC)),
 			0x0C => Some(Instruction::INCs(1, 4, Regs::RegC)),
 			0x0D => Some(Instruction::DECs(1, 4, Regs::RegC)),
 			0x0E => Some(Instruction::LD(2, 8, Regs::RegC, Regs::ByteFromPC)),
+			0x11 => Some(Instruction::LD16(3, 12, RegPairs::RegsDE, RegPairs::BytesFromPC)),
 			0x12 => Some(Instruction::LD(1, 8, Regs::DEPointee, Regs::RegA)),
 			0x13 => Some(Instruction::INCss(1, 8, RegPairs::RegsDE)),
 			0x14 => Some(Instruction::INCs(1, 4, Regs::RegD)),
@@ -72,6 +76,7 @@ impl Instruction {
 			0x1C => Some(Instruction::INCs(1, 4, Regs::RegE)),
 			0x1D => Some(Instruction::DECs(1, 4, Regs::RegE)),
 			0x1E => Some(Instruction::LD(2, 8, Regs::RegE, Regs::ByteFromPC)),
+			0x21 => Some(Instruction::LD16(3, 12, RegPairs::RegsHL, RegPairs::BytesFromPC)),
 			0x22 => Some(Instruction::LDI(1, 8, Regs::HLPointee, Regs::RegA)),
 			0x23 => Some(Instruction::INCss(1, 8, RegPairs::RegsHL)),
 			0x24 => Some(Instruction::INCs(1, 4, Regs::RegH)),
@@ -85,6 +90,7 @@ impl Instruction {
 			0x2D => Some(Instruction::DECs(1, 4, Regs::RegL)),
 			0x2E => Some(Instruction::LD(2, 8, Regs::RegL, Regs::ByteFromPC)),
 			0x2F => Some(Instruction::CPL(1, 4)),
+			0x31 => Some(Instruction::LD16(3, 12, RegPairs::RegSP, RegPairs::BytesFromPC)),
 			0x32 => Some(Instruction::LDD(1, 8, Regs::HLPointee, Regs::RegA)),
 			0x33 => Some(Instruction::INCss(1, 8, RegPairs::RegSP)),
 			0x34 => Some(Instruction::INCs(1, 12, Regs::HLPointee)),
@@ -225,7 +231,6 @@ impl Instruction {
 			0xBD => Some(Instruction::CPs(1, 4, ArithmeticOperand::RegL)),
 			0xBE => Some(Instruction::CPs(1, 8, ArithmeticOperand::HLPointee)),
 			0xBF => Some(Instruction::CPs(1, 4, ArithmeticOperand::RegA)),
-
 			0xC6 => Some(Instruction::ADDAs(2, 8, ArithmeticOperand::ByteFromPC)),
 			0xCE => Some(Instruction::ADCAs(2, 8, ArithmeticOperand::ByteFromPC)),
 			0xD6 => Some(Instruction::SUBs(2, 8, ArithmeticOperand::ByteFromPC)),
@@ -239,6 +244,7 @@ impl Instruction {
 			0xF0 => Some(Instruction::LD(2, 12, Regs::RegA, Regs::UpperRamOffsetFromPC)),
 			0xF2 => Some(Instruction::LD(1, 8, Regs::RegA, Regs::UpperRamOffsetFromRegC)),
 			0xF6 => Some(Instruction::ORs(2, 8, ArithmeticOperand::ByteFromPC)),
+			0xF9 => Some(Instruction::LD16(1, 8, RegPairs::RegSP, RegPairs::RegsHL)),
 			0xFA => Some(Instruction::LD(3, 16, Regs::RegA, Regs::BytesFromPCPointee)),
 			0xFE => Some(Instruction::CPs(2, 8, ArithmeticOperand::ByteFromPC)),
 			_ => None
@@ -316,20 +322,32 @@ impl Cpu {
 			Regs::ByteFromPC => {println!("SHOULD NEVER HAPPEN")}
 		}
 	}
-	pub fn set_reg_pair_value(&mut self, reg_pair: RegPairs, data: u16) {
+	pub fn get_reg_pair_big_endian_value(&mut self, reg_pair: RegPairs) -> u16 {
+		match reg_pair {
+			RegPairs::RegsBC => self.registers.get_bc_big_endian(),
+			RegPairs::RegsDE => self.registers.get_de_big_endian(),
+			RegPairs::RegsHL => self.registers.get_hl_big_endian(),
+			RegPairs::RegSP => self.registers.stack_pointer,
+			RegPairs::BytesFromPC => { self.fetch_pc() as u16 | ((self.fetch_pc() as u16) << 8) },
+			RegPairs::BytesFromPCPointee => {
+				println!("SHOULD NEVER HAPPEN");
+				let address = self.fetch_pc() as u16 | ((self.fetch_pc() as u16) << 8);
+				self.memory_bus.read_byte(address) as u16 | ((self.memory_bus.read_byte(address.overflowing_add(1).0) as u16) << 8)
+			},
+		}
+	}
+	pub fn set_reg_pair_big_endian_value(&mut self, reg_pair: RegPairs, data: u16) {
 		match reg_pair {
 			RegPairs::RegsBC => {self.registers.set_bc_big_endian(data)}
 			RegPairs::RegsDE => {self.registers.set_de_big_endian(data)}
 			RegPairs::RegsHL => {self.registers.set_hl_big_endian(data)}
 			RegPairs::RegSP => {self.registers.stack_pointer = data}
-		}
-	}
-	pub fn get_reg_pair_value(&self, reg_pair: RegPairs) -> u16 {
-		match reg_pair {
-			RegPairs::RegsBC => self.registers.get_bc_big_endian(),
-			RegPairs::RegsDE => self.registers.get_de_big_endian(),
-			RegPairs::RegsHL => self.registers.get_hl_big_endian(),
-			RegPairs::RegSP => self.registers.stack_pointer
+			RegPairs::BytesFromPCPointee => {
+				let address = self.fetch_pc() as u16 | ((self.fetch_pc() as u16) << 8);
+				self.memory_bus.write_byte(address, data as u8);
+				self.memory_bus.write_byte(address.overflowing_add(1).0, (data >> 8) as u8);
+			},
+			RegPairs::BytesFromPC => {println!("SHOULD NEVER HAPPEN")},
 		}
 	}
 	pub fn execute_op(&mut self, instruction: Instruction) {
@@ -348,6 +366,10 @@ impl Cpu {
 				let data = self.get_reg_value(src);
 				self.set_reg_value(target, data);
 				self.registers.set_hl_big_endian(self.registers.get_hl_big_endian().overflowing_sub(1).0);
+			}
+			Instruction::LD16(_, _, target, src) => {
+				let data = self.get_reg_pair_big_endian_value(src);
+				self.set_reg_pair_big_endian_value(target, data);
 			}
 			Instruction::ADDAs(_, _, _operand) | Instruction::ADCAs(_, _, _operand) => {
 				let reg_a_content = self.registers.a as u16;
@@ -421,10 +443,12 @@ impl Cpu {
 				self.set_reg_value(_target, target_value.overflowing_sub(1).0);
 			}
 			Instruction::INCss(_, _, _target) => {
-				self.set_reg_pair_value(_target, self.get_reg_pair_value(_target).overflowing_add(1).0);
+				let data = self.get_reg_pair_big_endian_value(_target).overflowing_add(1).0;
+				self.set_reg_pair_big_endian_value(_target, data);
 			}
 			Instruction::DECss(_, _, _target) => {
-				self.set_reg_pair_value(_target, self.get_reg_pair_value(_target).overflowing_sub(1).0);
+				let data = self.get_reg_pair_big_endian_value(_target).overflowing_sub(1).0;
+				self.set_reg_pair_big_endian_value(_target, data);
 			}
 			Instruction::ADDHLss(_, _, _operand) => {
 				let hl_value = self.registers.get_hl_big_endian();
