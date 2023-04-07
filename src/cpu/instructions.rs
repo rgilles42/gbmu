@@ -2,6 +2,7 @@ use super::{Cpu, CpuState};
 
 type InstrLength = u8;
 type InstrCycles = u8;
+
 #[derive(Debug, Clone, Copy)]
 pub enum Regs{
 	RegA, RegB, RegC, RegD, RegE, RegH, RegL, HLPointee, BCPointee, DEPointee, BytesFromPCPointee, UpperRamOffsetFromPC, UpperRamOffsetFromRegC, ByteFromPC
@@ -50,6 +51,17 @@ pub enum Instruction {
 	RLA(InstrLength, InstrCycles),
 	RRCA(InstrLength, InstrCycles),
 	RRA(InstrLength, InstrCycles),
+	RLC(InstrLength, InstrCycles, Regs),
+	RL(InstrLength, InstrCycles, Regs),
+	RRC(InstrLength, InstrCycles, Regs),
+	RR(InstrLength, InstrCycles, Regs),
+	SLA(InstrLength, InstrCycles, Regs),
+	SWAP(InstrLength, InstrCycles, Regs),
+	SRA(InstrLength, InstrCycles, Regs),
+	SRL(InstrLength, InstrCycles, Regs),
+	BIT(InstrLength, InstrCycles, u8, Regs),
+	SET(InstrLength, InstrCycles, u8, Regs),
+	RES(InstrLength, InstrCycles, u8, Regs),
 	CCF(InstrLength, InstrCycles),
 	SCF(InstrLength, InstrCycles),
 	NOP(InstrLength, InstrCycles),
@@ -323,7 +335,94 @@ impl Instruction {
 	}
 	pub fn from_cb_opcode(opcode: u8) -> Option<Instruction> {
 		match opcode {
-			_ => Some(Instruction::NOP(1, 4))
+			0x00 => Some(Instruction::RLC(2, 8, Regs::RegB)),
+			0x01 => Some(Instruction::RLC(2, 8, Regs::RegC)),
+			0x02 => Some(Instruction::RLC(2, 8, Regs::RegD)),
+			0x03 => Some(Instruction::RLC(2, 8, Regs::RegE)),
+			0x04 => Some(Instruction::RLC(2, 8, Regs::RegH)),
+			0x05 => Some(Instruction::RLC(2, 8, Regs::RegL)),
+			0x06 => Some(Instruction::RLC(2, 16, Regs::HLPointee)),
+			0x07 => Some(Instruction::RLC(2, 8, Regs::RegA)),
+			0x08 => Some(Instruction::RRC(2, 8, Regs::RegB)),
+			0x09 => Some(Instruction::RRC(2, 8, Regs::RegC)),
+			0x0A => Some(Instruction::RRC(2, 8, Regs::RegD)),
+			0x0B => Some(Instruction::RRC(2, 8, Regs::RegE)),
+			0x0C => Some(Instruction::RRC(2, 8, Regs::RegH)),
+			0x0D => Some(Instruction::RRC(2, 8, Regs::RegL)),
+			0x0E => Some(Instruction::RRC(2, 16, Regs::HLPointee)),
+			0x0F => Some(Instruction::RRC(2, 8, Regs::RegA)),
+			0x10 => Some(Instruction::RL(2, 8, Regs::RegB)),
+			0x11 => Some(Instruction::RL(2, 8, Regs::RegC)),
+			0x12 => Some(Instruction::RL(2, 8, Regs::RegD)),
+			0x13 => Some(Instruction::RL(2, 8, Regs::RegE)),
+			0x14 => Some(Instruction::RL(2, 8, Regs::RegH)),
+			0x15 => Some(Instruction::RL(2, 8, Regs::RegL)),
+			0x16 => Some(Instruction::RL(2, 16, Regs::HLPointee)),
+			0x17 => Some(Instruction::RL(2, 8, Regs::RegA)),
+			0x18 => Some(Instruction::RR(2, 8, Regs::RegB)),
+			0x19 => Some(Instruction::RR(2, 8, Regs::RegC)),
+			0x1A => Some(Instruction::RR(2, 8, Regs::RegD)),
+			0x1B => Some(Instruction::RR(2, 8, Regs::RegE)),
+			0x1C => Some(Instruction::RR(2, 8, Regs::RegH)),
+			0x1D => Some(Instruction::RR(2, 8, Regs::RegL)),
+			0x1E => Some(Instruction::RR(2, 16, Regs::HLPointee)),
+			0x1F => Some(Instruction::RR(2, 8, Regs::RegA)),
+			0x20 => Some(Instruction::SLA(2, 8, Regs::RegB)),
+			0x21 => Some(Instruction::SLA(2, 8, Regs::RegC)),
+			0x22 => Some(Instruction::SLA(2, 8, Regs::RegD)),
+			0x23 => Some(Instruction::SLA(2, 8, Regs::RegE)),
+			0x24 => Some(Instruction::SLA(2, 8, Regs::RegH)),
+			0x25 => Some(Instruction::SLA(2, 8, Regs::RegL)),
+			0x26 => Some(Instruction::SLA(2, 16, Regs::HLPointee)),
+			0x27 => Some(Instruction::SLA(2, 8, Regs::RegA)),
+			0x28 => Some(Instruction::SRA(2, 8, Regs::RegB)),
+			0x29 => Some(Instruction::SRA(2, 8, Regs::RegC)),
+			0x2A => Some(Instruction::SRA(2, 8, Regs::RegD)),
+			0x2B => Some(Instruction::SRA(2, 8, Regs::RegE)),
+			0x2C => Some(Instruction::SRA(2, 8, Regs::RegH)),
+			0x2D => Some(Instruction::SRA(2, 8, Regs::RegL)),
+			0x2E => Some(Instruction::SRA(2, 16, Regs::HLPointee)),
+			0x2F => Some(Instruction::SRA(2, 8, Regs::RegA)),
+			0x30 => Some(Instruction::SWAP(2, 8, Regs::RegB)),
+			0x31 => Some(Instruction::SWAP(2, 8, Regs::RegC)),
+			0x32 => Some(Instruction::SWAP(2, 8, Regs::RegD)),
+			0x33 => Some(Instruction::SWAP(2, 8, Regs::RegE)),
+			0x34 => Some(Instruction::SWAP(2, 8, Regs::RegH)),
+			0x35 => Some(Instruction::SWAP(2, 8, Regs::RegL)),
+			0x36 => Some(Instruction::SWAP(2, 16, Regs::HLPointee)),
+			0x37 => Some(Instruction::SWAP(2, 8, Regs::RegA)),
+			0x38 => Some(Instruction::SRL(2, 8, Regs::RegB)),
+			0x39 => Some(Instruction::SRL(2, 8, Regs::RegC)),
+			0x3A => Some(Instruction::SRL(2, 8, Regs::RegD)),
+			0x3B => Some(Instruction::SRL(2, 8, Regs::RegE)),
+			0x3C => Some(Instruction::SRL(2, 8, Regs::RegH)),
+			0x3D => Some(Instruction::SRL(2, 8, Regs::RegL)),
+			0x3E => Some(Instruction::SRL(2, 16, Regs::HLPointee)),
+			0x3F => Some(Instruction::SRL(2, 8, Regs::RegA)),
+			0x40 | 0x48 | 0x50 | 0x58 | 0x60 | 0x68 | 0x70 | 0x78 => Some(Instruction::BIT(2, 8, (opcode - 0x40) / 8, Regs::RegB)),
+			0x41 | 0x49 | 0x51 | 0x59 | 0x61 | 0x69 | 0x71 | 0x79 => Some(Instruction::BIT(2, 8, (opcode - 0x40) / 8, Regs::RegC)),
+			0x42 | 0x4A | 0x52 | 0x5A | 0x62 | 0x6A | 0x72 | 0x7A => Some(Instruction::BIT(2, 8, (opcode - 0x40) / 8, Regs::RegD)),
+			0x43 | 0x4B | 0x53 | 0x5B | 0x63 | 0x6B | 0x73 | 0x7B => Some(Instruction::BIT(2, 8, (opcode - 0x40) / 8, Regs::RegE)),
+			0x44 | 0x4C | 0x54 | 0x5C | 0x64 | 0x6C | 0x74 | 0x7C => Some(Instruction::BIT(2, 8, (opcode - 0x40) / 8, Regs::RegH)),
+			0x45 | 0x4D | 0x55 | 0x5D | 0x65 | 0x6D | 0x75 | 0x7D => Some(Instruction::BIT(2, 8, (opcode - 0x40) / 8, Regs::RegL)),
+			0x46 | 0x4E | 0x56 | 0x5E | 0x66 | 0x6E | 0x76 | 0x7E => Some(Instruction::BIT(2, 12, (opcode - 0x40) / 8, Regs::HLPointee)),
+			0x47 | 0x4F | 0x57 | 0x5F | 0x67 | 0x6F | 0x77 | 0x7F => Some(Instruction::BIT(2, 8, (opcode - 0x40) / 8, Regs::RegA)),
+			0x80 | 0x88 | 0x90 | 0x98 | 0xA0 | 0xA8 | 0xB0 | 0xB8 => Some(Instruction::RES(2, 8, (opcode - 0x80) / 8, Regs::RegB)),
+			0x81 | 0x89 | 0x91 | 0x99 | 0xA1 | 0xA9 | 0xB1 | 0xB9 => Some(Instruction::RES(2, 8, (opcode - 0x80) / 8, Regs::RegC)),
+			0x82 | 0x8A | 0x92 | 0x9A | 0xA2 | 0xAA | 0xB2 | 0xBA => Some(Instruction::RES(2, 8, (opcode - 0x80) / 8, Regs::RegD)),
+			0x83 | 0x8B | 0x93 | 0x9B | 0xA3 | 0xAB | 0xB3 | 0xBB => Some(Instruction::RES(2, 8, (opcode - 0x80) / 8, Regs::RegE)),
+			0x84 | 0x8C | 0x94 | 0x9C | 0xA4 | 0xAC | 0xB4 | 0xBC => Some(Instruction::RES(2, 8, (opcode - 0x80) / 8, Regs::RegH)),
+			0x85 | 0x8D | 0x95 | 0x9D | 0xA5 | 0xAD | 0xB5 | 0xBD => Some(Instruction::RES(2, 8, (opcode - 0x80) / 8, Regs::RegL)),
+			0x86 | 0x8E | 0x96 | 0x9E | 0xA6 | 0xAE | 0xB6 | 0xBE => Some(Instruction::RES(2, 16, (opcode - 0x80) / 8, Regs::HLPointee)),
+			0x87 | 0x8F | 0x97 | 0x9F | 0xA7 | 0xAF | 0xB7 | 0xBF => Some(Instruction::RES(2, 8, (opcode - 0x80) / 8, Regs::RegA)),
+			0xC0 | 0xC8 | 0xD0 | 0xD8 | 0xE0 | 0xE8 | 0xF0 | 0xF8 => Some(Instruction::SET(2, 8, (opcode - 0xC0) / 8, Regs::RegB)),
+			0xC1 | 0xC9 | 0xD1 | 0xD9 | 0xE1 | 0xE9 | 0xF1 | 0xF9 => Some(Instruction::SET(2, 8, (opcode - 0xC0) / 8, Regs::RegC)),
+			0xC2 | 0xCA | 0xD2 | 0xDA | 0xE2 | 0xEA | 0xF2 | 0xFA => Some(Instruction::SET(2, 8, (opcode - 0xC0) / 8, Regs::RegD)),
+			0xC3 | 0xCB | 0xD3 | 0xDB | 0xE3 | 0xEB | 0xF3 | 0xFB => Some(Instruction::SET(2, 8, (opcode - 0xC0) / 8, Regs::RegE)),
+			0xC4 | 0xCC | 0xD4 | 0xDC | 0xE4 | 0xEC | 0xF4 | 0xFC => Some(Instruction::SET(2, 8, (opcode - 0xC0) / 8, Regs::RegH)),
+			0xC5 | 0xCD | 0xD5 | 0xDD | 0xE5 | 0xED | 0xF5 | 0xFD => Some(Instruction::SET(2, 8, (opcode - 0xC0) / 8, Regs::RegL)),
+			0xC6 | 0xCE | 0xD6 | 0xDE | 0xE6 | 0xEE | 0xF6 | 0xFE => Some(Instruction::SET(2, 16, (opcode - 0xC0) / 8, Regs::HLPointee)),
+			0xC7 | 0xCF | 0xD7 | 0xDF | 0xE7 | 0xEF | 0xF7 | 0xFF => Some(Instruction::SET(2, 8, (opcode - 0xC0) / 8, Regs::RegA))
 		}
 	}
 }
@@ -630,6 +729,91 @@ impl Cpu {
 				self.registers.f.substract = false;
 				self.registers.f.half_carry = false;
 				self.registers.a = (reg_content >> 8) as u8;
+			}
+			Instruction::RLC(_, _, target) => {
+				self.registers.f.substract = false;
+				self.registers.f.half_carry = false;
+				self.registers.f.carry = false;
+				let mut reg_content = (self.get_reg_value(target) as u16) << 1;
+				if (reg_content & 0x0100) != 0 {
+					self.registers.f.carry = true;
+					reg_content += 1;
+				}
+				self.registers.f.zero = reg_content == 0;
+				self.set_reg_value(target, reg_content as u8);
+			}
+			Instruction::RL(_, _, target) => {
+				let mut reg_content = (self.get_reg_value(target) as u16) << 1;
+				reg_content += if self.registers.f.carry {1} else {0};
+				self.registers.f.carry = (reg_content & 0x0100) != 0;
+				self.registers.f.zero = reg_content == 0;
+				self.registers.f.substract = false;
+				self.registers.f.half_carry = false;
+				self.set_reg_value(target, reg_content as u8);
+			}
+			Instruction::RRC(_, _, target) => {
+				self.registers.f.substract = false;
+				self.registers.f.half_carry = false;
+				self.registers.f.carry = false;
+				let mut reg_content = (self.get_reg_value(target) as u16) << 7;
+				if (reg_content & 0x0080) != 0 {
+					self.registers.f.carry = true;
+					reg_content += 0x8000;
+				}
+				self.registers.f.zero = reg_content == 0;
+				self.set_reg_value(target, (reg_content >> 8) as u8);
+			}
+			Instruction::RR(_, _, target) => {
+				let mut reg_content = (self.get_reg_value(target) as u16) << 7;
+				reg_content += if self.registers.f.carry {0x8000} else {0};
+				self.registers.f.carry = (reg_content & 0x0080) != 0;
+				self.registers.f.zero = reg_content == 0;
+				self.registers.f.substract = false;
+				self.registers.f.half_carry = false;
+				self.set_reg_value(target, (reg_content >> 8) as u8);
+			}
+			Instruction::SLA(_, _, target) => {
+				let reg_content = (self.get_reg_value(target) as u16) << 1;
+				self.registers.f.carry = (reg_content & 0x0100) != 0;
+				self.registers.f.zero = reg_content == 0;
+				self.registers.f.substract = false;
+				self.registers.f.half_carry = false;
+				self.set_reg_value(target, reg_content as u8);
+			}
+			Instruction::SWAP(_, _, target) => {
+				let reg_content = self.get_reg_value(target);
+				let reg_content = reg_content << 4 | reg_content >> 4;
+				self.set_reg_value(target, reg_content);
+			}
+			Instruction::SRA(_, _, target) => {
+				let mut reg_content = (self.get_reg_value(target) as u16) << 7;
+				reg_content |= (reg_content & 0x4000) << 1;
+				self.registers.f.carry = (reg_content & 0x0080) != 0;
+				self.registers.f.zero = reg_content == 0;
+				self.registers.f.substract = false;
+				self.registers.f.half_carry = false;
+				self.set_reg_value(target, (reg_content >> 8) as u8);
+			}
+			Instruction::SRL(_, _, target) => {
+				let reg_content = (self.get_reg_value(target) as u16) << 7;
+				self.registers.f.carry = (reg_content & 0x0080) != 0;
+				self.registers.f.zero = reg_content == 0;
+				self.registers.f.substract = false;
+				self.registers.f.half_carry = false;
+				self.set_reg_value(target, (reg_content >> 8) as u8);
+			}
+			Instruction::BIT(_, _, pos, target) => {
+				self.registers.f.substract = false;
+				self.registers.f.half_carry = true;
+				self.registers.f.zero = (self.get_reg_value(target) & (1 << pos)) == 0;
+			}
+			Instruction::SET(_, _, pos, target) => {
+				let reg_content = self.get_reg_value(target) | (1 << pos);
+				self.set_reg_value(target, reg_content);
+			}
+			Instruction::RES(_, _, pos, target) => {
+				let reg_content = self.get_reg_value(target) & !(1 << pos);
+				self.set_reg_value(target, reg_content);
 			}
 			Instruction::JPnn(_, _) => self.registers.program_counter = self.get_reg_pair_big_endian_value(RegPairs::BytesFromPC),
 			Instruction::JPHL(_, _) => self.registers.program_counter = self.registers.get_hl_big_endian(),
