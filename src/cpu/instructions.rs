@@ -1,4 +1,4 @@
-use super::Cpu;
+use super::{Cpu, CpuState};
 
 type InstrLength = u8;
 type InstrCycles = u8;
@@ -23,6 +23,11 @@ pub enum RegPairs{
 #[derive(Debug, Clone, Copy)]
 pub enum JumpCondition{
 	NotZero, Zero, NotCarry, Carry
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum ResetLocation{
+	Hex00, Hex08, Hex10, Hex18, Hex20, Hex28, Hex30, Hex38
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -57,11 +62,21 @@ pub enum Instruction {
 	CCF(InstrLength, InstrCycles),
 	SCF(InstrLength, InstrCycles),
 	NOP(InstrLength, InstrCycles),
+	HALT(InstrLength, InstrCycles),
+	STOP(InstrLength, InstrCycles),
+	DI(InstrLength, InstrCycles),
+	EI(InstrLength, InstrCycles),
 	JPnn(InstrLength, InstrCycles),
 	JPHL(InstrLength, InstrCycles),
 	JPfnn(InstrLength, InstrCycles, JumpCondition),
 	JR(InstrLength, InstrCycles),
-	JRf(InstrLength, InstrCycles, JumpCondition)
+	JRf(InstrLength, InstrCycles, JumpCondition),
+	CALL(InstrLength, InstrCycles),
+	CALLf(InstrLength, InstrCycles, JumpCondition),
+	RET(InstrLength, InstrCycles),
+	RETf(InstrLength, InstrCycles, JumpCondition),
+	RETI(InstrLength, InstrCycles),
+	RST(InstrLength, InstrCycles, ResetLocation),
 }
 
 impl Instruction {
@@ -83,6 +98,7 @@ impl Instruction {
 			0x0D => Some(Instruction::DECs(1, 4, Regs::RegC)),
 			0x0E => Some(Instruction::LD(2, 8, Regs::RegC, Regs::ByteFromPC)),
 			0x0F => Some(Instruction::RRCA(1, 4)),
+			0x10 => Some(Instruction::STOP(2, 4)),													// STOP takes no argument per se but will still consume the next byte
 			0x11 => Some(Instruction::LD16(3, 12, RegPairs::RegsDE, RegPairs::BytesFromPC)),
 			0x12 => Some(Instruction::LD(1, 8, Regs::DEPointee, Regs::RegA)),
 			0x13 => Some(Instruction::INCss(1, 8, RegPairs::RegsDE)),
@@ -184,6 +200,7 @@ impl Instruction {
 			0x73 => Some(Instruction::LD(1, 8, Regs::HLPointee, Regs::RegE)),
 			0x74 => Some(Instruction::LD(1, 8, Regs::HLPointee, Regs::RegH)),
 			0x75 => Some(Instruction::LD(1, 8, Regs::HLPointee, Regs::RegL)),
+			0x76 => Some(Instruction::HALT(1, 4)),
 			0x77 => Some(Instruction::LD(1, 8, Regs::HLPointee, Regs::RegA)),
 			0x78 => Some(Instruction::LD(1, 4, Regs::RegA, Regs::RegB)),
 			0x79 => Some(Instruction::LD(1, 4, Regs::RegA, Regs::RegC)),
@@ -257,39 +274,60 @@ impl Instruction {
 			0xBD => Some(Instruction::CPs(1, 4, ArithmeticOperand::RegL)),
 			0xBE => Some(Instruction::CPs(1, 8, ArithmeticOperand::HLPointee)),
 			0xBF => Some(Instruction::CPs(1, 4, ArithmeticOperand::RegA)),
+			0xC0 => Some(Instruction::RETf(1, 8, JumpCondition::NotZero)),
 			0xC1 => Some(Instruction::POP(1, 12, RegPairs::RegsBC)),
 			0xC2 => Some(Instruction::JPfnn(3, 12, JumpCondition::NotZero)),
 			0xC3 => Some(Instruction::JPnn(3, 16)),
+			0xC4 => Some(Instruction::CALLf(3, 12, JumpCondition::NotZero)),
 			0xC5 => Some(Instruction::PUSH(1, 16, RegPairs::RegsBC)),
 			0xC6 => Some(Instruction::ADDAs(2, 8, ArithmeticOperand::ByteFromPC)),
+			0xC7 => Some(Instruction::RST(1, 16, ResetLocation::Hex00)),
+			0xC8 => Some(Instruction::RETf(1, 8, JumpCondition::Zero)),
+			0xC9 => Some(Instruction::RET(1, 16)),
 			0xCA => Some(Instruction::JPfnn(3, 12, JumpCondition::Zero)),
 			0xCB => Self::from_cb_opcode(cpu.fetch_pc()),
+			0xCC => Some(Instruction::CALLf(3, 12, JumpCondition::Zero)),
+			0xCD => Some(Instruction::CALL(3, 24)),
 			0xCE => Some(Instruction::ADCAs(2, 8, ArithmeticOperand::ByteFromPC)),
+			0xCF => Some(Instruction::RST(1, 16, ResetLocation::Hex08)),
+			0xD0 => Some(Instruction::RETf(1, 8, JumpCondition::NotCarry)),
 			0xD1 => Some(Instruction::POP(1, 12, RegPairs::RegsDE)),
 			0xD2 => Some(Instruction::JPfnn(3, 12, JumpCondition::NotCarry)),
+			0xD4 => Some(Instruction::CALLf(3, 12, JumpCondition::NotCarry)),
 			0xD5 => Some(Instruction::PUSH(1, 16, RegPairs::RegsDE)),
 			0xD6 => Some(Instruction::SUBs(2, 8, ArithmeticOperand::ByteFromPC)),
+			0xD7 => Some(Instruction::RST(1, 16, ResetLocation::Hex10)),
+			0xD8 => Some(Instruction::RETf(1, 8, JumpCondition::Carry)),
+			0xD9 => Some(Instruction::RETI(1, 16)),
 			0xDA => Some(Instruction::JPfnn(3, 12, JumpCondition::Carry)),
+			0xDC => Some(Instruction::CALLf(3, 12, JumpCondition::Carry)),
 			0xDE => Some(Instruction::SBCAs(2, 8, ArithmeticOperand::ByteFromPC)),
+			0xDF => Some(Instruction::RST(1, 16, ResetLocation::Hex18)),
 			0xE0 => Some(Instruction::LD(2, 12, Regs::UpperRamOffsetFromPC, Regs::RegA)),
 			0xE1 => Some(Instruction::POP(1, 12, RegPairs::RegsHL)),
 			0xE2 => Some(Instruction::LD(1, 8, Regs::UpperRamOffsetFromRegC, Regs::RegA)),
 			0xE5 => Some(Instruction::PUSH(1, 16, RegPairs::RegsHL)),
 			0xE6 => Some(Instruction::ANDs(2, 8, ArithmeticOperand::ByteFromPC)),
+			0xE7 => Some(Instruction::RST(1, 16, ResetLocation::Hex20)),
 			0xE8 => Some(Instruction::ADDSPe(2, 16)),
 			0xE9 => Some(Instruction::JPHL(1, 4)),
 			0xEA => Some(Instruction::LD(3, 16, Regs::BytesFromPCPointee, Regs::RegA)),
 			0xEE => Some(Instruction::XORs(2, 8, ArithmeticOperand::ByteFromPC)),
+			0xEF => Some(Instruction::RST(1, 16, ResetLocation::Hex28)),
 			0xF0 => Some(Instruction::LD(2, 12, Regs::RegA, Regs::UpperRamOffsetFromPC)),
 			0xF1 => Some(Instruction::POP(1, 12, RegPairs::RegsAF)),
 			0xF2 => Some(Instruction::LD(1, 8, Regs::RegA, Regs::UpperRamOffsetFromRegC)),
+			0xF3 => Some(Instruction::DI(1, 4)),
 			0xF5 => Some(Instruction::PUSH(1, 16, RegPairs::RegsAF)),
 			0xF6 => Some(Instruction::ORs(2, 8, ArithmeticOperand::ByteFromPC)),
+			0xF7 => Some(Instruction::RST(1, 16, ResetLocation::Hex30)),
 			0xF8 => Some(Instruction::LDHLSPe(2, 12)),
 			0xF9 => Some(Instruction::LD16(1, 8, RegPairs::RegSP, RegPairs::RegsHL)),
 			0xFA => Some(Instruction::LD(3, 16, Regs::RegA, Regs::BytesFromPCPointee)),
+			0xFB => Some(Instruction::EI(1, 4)),
 			0xFE => Some(Instruction::CPs(2, 8, ArithmeticOperand::ByteFromPC)),
-			_ => None
+			0xFF => Some(Instruction::RST(1, 16, ResetLocation::Hex38)),
+			0xD3 | 0xDB | 0xDD | 0xE3 | 0xE4 | 0xEB | 0xEC | 0xED | 0xF4 | 0xFC | 0xFD => None
 		}
 	}
 	pub fn from_cb_opcode(opcode: u8) -> Option<Instruction> {
@@ -627,23 +665,16 @@ impl Cpu {
 			Instruction::JPHL(_, _) => self.registers.program_counter = self.registers.get_hl_big_endian(),
 			Instruction::JPfnn(len, _, condition) => {
 				let destination = self.get_reg_pair_big_endian_value(RegPairs::BytesFromPC);
+				let mut do_jump = false;
 				match condition {
-					JumpCondition::NotZero => {
-						self.current_op = Some(Instruction::JPfnn(len, 16, condition));
-						if !self.registers.f.zero {self.registers.program_counter = destination};
-					}
-					JumpCondition::Zero => {
-						self.current_op = Some(Instruction::JPfnn(len, 16, condition));
-						if self.registers.f.zero {self.registers.program_counter = destination};
-					}
-					JumpCondition::NotCarry => {
-						self.current_op = Some(Instruction::JPfnn(len, 16, condition));
-						if !self.registers.f.carry {self.registers.program_counter = destination};
-					}
-					JumpCondition::Carry => {
-						self.current_op = Some(Instruction::JPfnn(len, 16, condition));
-						if self.registers.f.carry {self.registers.program_counter = destination};
-					}
+					JumpCondition::NotZero => {if !self.registers.f.zero {do_jump = true};}
+					JumpCondition::Zero => {if self.registers.f.zero {do_jump = true};}
+					JumpCondition::NotCarry => {if !self.registers.f.carry {do_jump = true};}
+					JumpCondition::Carry => {if self.registers.f.carry {do_jump = true};}
+				}
+				if do_jump {
+					self.current_op = Some(Instruction::JPfnn(len, 16, condition));
+					self.registers.program_counter = destination;
 				}
 			}
 			Instruction::JR(_, _) => {
@@ -652,25 +683,97 @@ impl Cpu {
 			}
 			Instruction::JRf(len, _, condition) => {
 				let operand_value = self.fetch_pc() as i8 as u16;
+				let mut do_jump = false;
 				match condition {
-					JumpCondition::NotZero => {
-						self.current_op = Some(Instruction::JRf(len, 12, condition));
-						if !self.registers.f.zero {self.registers.program_counter = self.registers.program_counter.overflowing_add(operand_value).0};
-					}
-					JumpCondition::Zero => {
-						self.current_op = Some(Instruction::JRf(len, 12, condition));
-						if self.registers.f.zero {self.registers.program_counter = self.registers.program_counter.overflowing_add(operand_value).0};
-					}
-					JumpCondition::NotCarry => {
-						self.current_op = Some(Instruction::JRf(len, 12, condition));
-						if !self.registers.f.carry {self.registers.program_counter = self.registers.program_counter.overflowing_add(operand_value).0};
-					}
-					JumpCondition::Carry => {
-						self.current_op = Some(Instruction::JRf(len, 12, condition));
-						if self.registers.f.carry {self.registers.program_counter = self.registers.program_counter.overflowing_add(operand_value).0};
-					}
+					JumpCondition::NotZero => {if !self.registers.f.zero {do_jump = true};}
+					JumpCondition::Zero => {if self.registers.f.zero {do_jump = true};}
+					JumpCondition::NotCarry => {if !self.registers.f.carry {do_jump = true};}
+					JumpCondition::Carry => {if self.registers.f.carry {do_jump = true};}
+				}
+				if do_jump {
+					self.current_op = Some(Instruction::JRf(len, 12, condition));
+					self.registers.program_counter = self.registers.program_counter.overflowing_add(operand_value).0;
 				}
 			}
+			Instruction::CALL(_, _) => {
+				let address = self.get_reg_pair_big_endian_value(RegPairs::BytesFromPC);
+				self.memory_bus.write_byte(self.registers.stack_pointer.overflowing_sub(1).0, (self.registers.program_counter >> 8) as u8);
+				self.memory_bus.write_byte(self.registers.stack_pointer.overflowing_sub(2).0, self.registers.program_counter as u8);
+				self.registers.stack_pointer = self.registers.stack_pointer.overflowing_sub(2).0;
+				self.registers.program_counter = address;
+			}
+			Instruction::CALLf(len, _, condition) => {
+				let address = self.get_reg_pair_big_endian_value(RegPairs::BytesFromPC);
+				let mut do_call = false;
+				match condition {
+					JumpCondition::NotZero => {if !self.registers.f.zero {do_call = true};}
+					JumpCondition::Zero => {if self.registers.f.zero {do_call = true};}
+					JumpCondition::NotCarry => {if !self.registers.f.carry {do_call = true};}
+					JumpCondition::Carry => {if self.registers.f.carry {do_call = true};}
+				}
+				if do_call {
+					self.current_op = Some(Instruction::CALLf(len, 24, condition));
+					self.memory_bus.write_byte(self.registers.stack_pointer.overflowing_sub(1).0, (self.registers.program_counter >> 8) as u8);
+					self.memory_bus.write_byte(self.registers.stack_pointer.overflowing_sub(2).0, self.registers.program_counter as u8);
+					self.registers.stack_pointer = self.registers.stack_pointer.overflowing_sub(2).0;
+					self.registers.program_counter = address;
+				}
+			}
+			Instruction::RET(_, _) => {
+				let mut ret_pc = 0x0000 as u16;
+				ret_pc |= self.memory_bus.read_byte(self.registers.stack_pointer) as u16;
+				ret_pc |= (self.memory_bus.read_byte(self.registers.stack_pointer.overflowing_add(1).0) as u16) << 8;
+				self.registers.stack_pointer = self.registers.stack_pointer.overflowing_add(2).0;
+				self.registers.program_counter = ret_pc;
+			}
+			Instruction::RETf(len, _, condition) => {
+				let mut do_call = false;
+				match condition {
+					JumpCondition::NotZero => {if !self.registers.f.zero {do_call = true};}
+					JumpCondition::Zero => {if self.registers.f.zero {do_call = true};}
+					JumpCondition::NotCarry => {if !self.registers.f.carry {do_call = true};}
+					JumpCondition::Carry => {if self.registers.f.carry {do_call = true};}
+				}
+				if do_call {
+					self.current_op = Some(Instruction::RETf(len, 20, condition));
+					let mut ret_pc = 0x0000 as u16;
+					ret_pc |= self.memory_bus.read_byte(self.registers.stack_pointer) as u16;
+					ret_pc |= (self.memory_bus.read_byte(self.registers.stack_pointer.overflowing_add(1).0) as u16) << 8;
+					self.registers.stack_pointer = self.registers.stack_pointer.overflowing_add(2).0;
+					self.registers.program_counter = ret_pc;
+				}
+			}
+			Instruction::RETI(_, _) => {
+				let mut ret_pc = 0x0000 as u16;
+				ret_pc |= self.memory_bus.read_byte(self.registers.stack_pointer) as u16;
+				ret_pc |= (self.memory_bus.read_byte(self.registers.stack_pointer.overflowing_add(1).0) as u16) << 8;
+				self.registers.stack_pointer = self.registers.stack_pointer.overflowing_add(2).0;
+				self.registers.program_counter = ret_pc;
+				self.ime_set = true;
+			},
+			Instruction::RST(_, _, location) => {
+				let location = match location {
+					ResetLocation::Hex00 => 0x00 as u16,
+					ResetLocation::Hex08 => 0x08 as u16,
+					ResetLocation::Hex10 => 0x10 as u16,
+					ResetLocation::Hex18 => 0x18 as u16,
+					ResetLocation::Hex20 => 0x20 as u16,
+					ResetLocation::Hex28 => 0x28 as u16,
+					ResetLocation::Hex30 => 0x30 as u16,
+					ResetLocation::Hex38 => 0x38 as u16,
+				};
+				self.memory_bus.write_byte(self.registers.stack_pointer.overflowing_sub(1).0, (self.registers.program_counter >> 8) as u8);
+				self.memory_bus.write_byte(self.registers.stack_pointer.overflowing_sub(2).0, self.registers.program_counter as u8);
+				self.registers.stack_pointer = self.registers.stack_pointer.overflowing_sub(2).0;
+				self.registers.program_counter = location;
+			}
+			Instruction::HALT(_, _) => {self.state = CpuState::Halted}
+			Instruction::STOP(_, _) => {
+				self.fetch_pc();
+				self.state = CpuState::Stopped
+			}
+			Instruction::DI(_, _) => {self.ime_set = false}
+			Instruction::EI(_, _) => {self.ime_scheduled = true}
 		}
 	}
 }

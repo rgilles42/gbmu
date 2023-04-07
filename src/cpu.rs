@@ -5,12 +5,20 @@ use registers::Registers;
 use memory_bus::MemoryBus;
 use instructions::Instruction;
 
+#[derive(Debug, Clone, Copy)]
+pub enum CpuState{
+	Running, Halted, Stopped
+}
+
 #[derive(Debug)]
 pub struct Cpu {
 	registers: Registers,
 	memory_bus: MemoryBus,
 	current_op: Option<Instruction>,
-	next_op: Option<Instruction>
+	next_op: Option<Instruction>,
+	ime_scheduled: bool,
+	ime_set: bool,
+	state: CpuState
 }
 
 impl Cpu {
@@ -19,7 +27,10 @@ impl Cpu {
 			registers: Registers::new(),
     		memory_bus: MemoryBus::new(),
     		current_op: Some(Instruction::NOP(1, 1)),				// Fake 'execute' of first tick which is just a 'fetch' 
-			next_op: None
+			next_op: None,
+			ime_scheduled: false,
+			ime_set: false,
+			state: CpuState::Running
 		};
 		cpu.registers.init();
 		cpu.memory_bus.init();
