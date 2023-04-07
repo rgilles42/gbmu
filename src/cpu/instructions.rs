@@ -2,15 +2,6 @@ use super::{Cpu, CpuState};
 
 type InstrLength = u8;
 type InstrCycles = u8;
-
-#[derive(Debug, Clone, Copy)]
-pub enum ArithmeticOperand{
-	RegA, RegB, RegC, RegD, RegE, RegH, RegL, HLPointee, ByteFromPC
-}
-#[derive(Debug, Clone, Copy)]
-pub enum LargeArithmeticOperand{
-	RegsBC, RegsDE, RegsHL, RegSP
-}
 #[derive(Debug, Clone, Copy)]
 pub enum Regs{
 	RegA, RegB, RegC, RegD, RegE, RegH, RegL, HLPointee, BCPointee, DEPointee, BytesFromPCPointee, UpperRamOffsetFromPC, UpperRamOffsetFromRegC, ByteFromPC
@@ -38,19 +29,19 @@ pub enum Instruction {
 	LD16(InstrLength, InstrCycles, RegPairs, RegPairs),
 	PUSH(InstrLength, InstrCycles, RegPairs),
 	POP(InstrLength, InstrCycles, RegPairs),
-	ADDAs(InstrLength, InstrCycles, ArithmeticOperand),
-	ADCAs(InstrLength, InstrCycles, ArithmeticOperand),
-	SUBs(InstrLength, InstrCycles, ArithmeticOperand),
-	SBCAs(InstrLength, InstrCycles, ArithmeticOperand),
-	ANDs(InstrLength, InstrCycles, ArithmeticOperand),
-	XORs(InstrLength, InstrCycles, ArithmeticOperand),
-	ORs(InstrLength, InstrCycles, ArithmeticOperand),
-	CPs(InstrLength, InstrCycles, ArithmeticOperand),
+	ADDAs(InstrLength, InstrCycles, Regs),
+	ADCAs(InstrLength, InstrCycles, Regs),
+	SUBs(InstrLength, InstrCycles, Regs),
+	SBCAs(InstrLength, InstrCycles, Regs),
+	ANDs(InstrLength, InstrCycles, Regs),
+	XORs(InstrLength, InstrCycles, Regs),
+	ORs(InstrLength, InstrCycles, Regs),
+	CPs(InstrLength, InstrCycles, Regs),
 	INCs(InstrLength, InstrCycles, Regs),
 	DECs(InstrLength, InstrCycles, Regs),
 	DAA(InstrLength, InstrCycles),
 	CPL(InstrLength, InstrCycles),
-	ADDHLss(InstrLength, InstrCycles, LargeArithmeticOperand),
+	ADDHLss(InstrLength, InstrCycles, RegPairs),
 	INCss(InstrLength, InstrCycles, RegPairs),
 	DECss(InstrLength, InstrCycles, RegPairs),
 	ADDSPe(InstrLength, InstrCycles),
@@ -91,7 +82,7 @@ impl Instruction {
 			0x06 => Some(Instruction::LD(2, 8, Regs::RegB, Regs::ByteFromPC)),
 			0x07 => Some(Instruction::RLCA(1, 4)),
 			0x08 => Some(Instruction::LD16(3, 20, RegPairs::BytesFromPCPointee, RegPairs::RegSP)),
-			0x09 => Some(Instruction::ADDHLss(1, 8, LargeArithmeticOperand::RegsBC)),
+			0x09 => Some(Instruction::ADDHLss(1, 8, RegPairs::RegsBC)),
 			0x0A => Some(Instruction::LD(1, 8, Regs::RegA, Regs::BCPointee)),
 			0x0B => Some(Instruction::DECss(1, 8, RegPairs::RegsBC)),
 			0x0C => Some(Instruction::INCs(1, 4, Regs::RegC)),
@@ -107,7 +98,7 @@ impl Instruction {
 			0x16 => Some(Instruction::LD(2, 8, Regs::RegD, Regs::ByteFromPC)),
 			0x17 => Some(Instruction::RLA(1, 4)),
 			0x18 => Some(Instruction::JR(2, 12)),
-			0x19 => Some(Instruction::ADDHLss(1, 8, LargeArithmeticOperand::RegsDE)),
+			0x19 => Some(Instruction::ADDHLss(1, 8, RegPairs::RegsDE)),
 			0x20 => Some(Instruction::JRf(2, 8, JumpCondition::NotZero)),
 			0x1A => Some(Instruction::LD(1, 8, Regs::RegA, Regs::DEPointee)),
 			0x1B => Some(Instruction::DECss(1, 8, RegPairs::RegsDE)),
@@ -123,7 +114,7 @@ impl Instruction {
 			0x26 => Some(Instruction::LD(2, 8, Regs::RegH, Regs::ByteFromPC)),
 			0x27 => Some(Instruction::DAA(1, 4)),
 			0x28 => Some(Instruction::JRf(2, 8, JumpCondition::Zero)),
-			0x29 => Some(Instruction::ADDHLss(1, 8, LargeArithmeticOperand::RegsHL)),
+			0x29 => Some(Instruction::ADDHLss(1, 8, RegPairs::RegsHL)),
 			0x30 => Some(Instruction::JRf(2, 8, JumpCondition::NotCarry)),
 			0x2A => Some(Instruction::LDI(1, 8, Regs::RegA, Regs::HLPointee)),
 			0x2B => Some(Instruction::DECss(1, 8, RegPairs::RegsHL)),
@@ -139,7 +130,7 @@ impl Instruction {
 			0x36 => Some(Instruction::LD(2, 12, Regs::HLPointee, Regs::ByteFromPC)),
 			0x37 => Some(Instruction::SCF(1, 4)),
 			0x38 => Some(Instruction::JRf(2, 8, JumpCondition::Carry)),
-			0x39 => Some(Instruction::ADDHLss(1, 8, LargeArithmeticOperand::RegSP)),
+			0x39 => Some(Instruction::ADDHLss(1, 8, RegPairs::RegSP)),
 			0x3A => Some(Instruction::LDD(1, 8, Regs::RegA, Regs::HLPointee)),
 			0x3B => Some(Instruction::DECss(1, 8, RegPairs::RegSP)),
 			0x3C => Some(Instruction::INCs(1, 4, Regs::RegA)),
@@ -210,77 +201,77 @@ impl Instruction {
 			0x7D => Some(Instruction::LD(1, 4, Regs::RegA, Regs::RegL)),
 			0x7E => Some(Instruction::LD(1, 8, Regs::RegA, Regs::HLPointee)),
 			0x7F => Some(Instruction::LD(1, 4, Regs::RegA, Regs::RegA)),
-			0x80 => Some(Instruction::ADDAs(1, 4, ArithmeticOperand::RegB)),
-			0x81 => Some(Instruction::ADDAs(1, 4, ArithmeticOperand::RegC)),
-			0x82 => Some(Instruction::ADDAs(1, 4, ArithmeticOperand::RegD)),
-			0x83 => Some(Instruction::ADDAs(1, 4, ArithmeticOperand::RegE)),
-			0x84 => Some(Instruction::ADDAs(1, 4, ArithmeticOperand::RegH)),
-			0x85 => Some(Instruction::ADDAs(1, 4, ArithmeticOperand::RegL)),
-			0x86 => Some(Instruction::ADDAs(1, 8, ArithmeticOperand::HLPointee)),
-			0x87 => Some(Instruction::ADDAs(1, 4, ArithmeticOperand::RegA)),
-			0x88 => Some(Instruction::ADCAs(1, 4, ArithmeticOperand::RegB)),
-			0x89 => Some(Instruction::ADCAs(1, 4, ArithmeticOperand::RegC)),
-			0x8A => Some(Instruction::ADCAs(1, 4, ArithmeticOperand::RegD)),
-			0x8B => Some(Instruction::ADCAs(1, 4, ArithmeticOperand::RegE)),
-			0x8C => Some(Instruction::ADCAs(1, 4, ArithmeticOperand::RegH)),
-			0x8D => Some(Instruction::ADCAs(1, 4, ArithmeticOperand::RegL)),
-			0x8E => Some(Instruction::ADCAs(1, 8, ArithmeticOperand::HLPointee)),
-			0x8F => Some(Instruction::ADCAs(1, 4, ArithmeticOperand::RegA)),
-			0x90 => Some(Instruction::SUBs(1, 4, ArithmeticOperand::RegB)),
-			0x91 => Some(Instruction::SUBs(1, 4, ArithmeticOperand::RegC)),
-			0x92 => Some(Instruction::SUBs(1, 4, ArithmeticOperand::RegD)),
-			0x93 => Some(Instruction::SUBs(1, 4, ArithmeticOperand::RegE)),
-			0x94 => Some(Instruction::SUBs(1, 4, ArithmeticOperand::RegH)),
-			0x95 => Some(Instruction::SUBs(1, 4, ArithmeticOperand::RegL)),
-			0x96 => Some(Instruction::SUBs(1, 8, ArithmeticOperand::HLPointee)),
-			0x97 => Some(Instruction::SUBs(1, 4, ArithmeticOperand::RegA)),
-			0x98 => Some(Instruction::SBCAs(1, 4, ArithmeticOperand::RegB)),
-			0x99 => Some(Instruction::SBCAs(1, 4, ArithmeticOperand::RegC)),
-			0x9A => Some(Instruction::SBCAs(1, 4, ArithmeticOperand::RegD)),
-			0x9B => Some(Instruction::SBCAs(1, 4, ArithmeticOperand::RegE)),
-			0x9C => Some(Instruction::SBCAs(1, 4, ArithmeticOperand::RegH)),
-			0x9D => Some(Instruction::SBCAs(1, 4, ArithmeticOperand::RegL)),
-			0x9E => Some(Instruction::SBCAs(1, 8, ArithmeticOperand::HLPointee)),
-			0x9F => Some(Instruction::SBCAs(1, 4, ArithmeticOperand::RegA)),
-			0xA0 => Some(Instruction::ANDs(1, 4, ArithmeticOperand::RegB)),
-			0xA1 => Some(Instruction::ANDs(1, 4, ArithmeticOperand::RegC)),
-			0xA2 => Some(Instruction::ANDs(1, 4, ArithmeticOperand::RegD)),
-			0xA3 => Some(Instruction::ANDs(1, 4, ArithmeticOperand::RegE)),
-			0xA4 => Some(Instruction::ANDs(1, 4, ArithmeticOperand::RegH)),
-			0xA5 => Some(Instruction::ANDs(1, 4, ArithmeticOperand::RegL)),
-			0xA6 => Some(Instruction::ANDs(1, 8, ArithmeticOperand::HLPointee)),
-			0xA7 => Some(Instruction::ANDs(1, 4, ArithmeticOperand::RegA)),
-			0xA8 => Some(Instruction::XORs(1, 4, ArithmeticOperand::RegB)),
-			0xA9 => Some(Instruction::XORs(1, 4, ArithmeticOperand::RegC)),
-			0xAA => Some(Instruction::XORs(1, 4, ArithmeticOperand::RegD)),
-			0xAB => Some(Instruction::XORs(1, 4, ArithmeticOperand::RegE)),
-			0xAC => Some(Instruction::XORs(1, 4, ArithmeticOperand::RegH)),
-			0xAD => Some(Instruction::XORs(1, 4, ArithmeticOperand::RegL)),
-			0xAE => Some(Instruction::XORs(1, 8, ArithmeticOperand::HLPointee)),
-			0xAF => Some(Instruction::XORs(1, 4, ArithmeticOperand::RegA)),
-			0xB0 => Some(Instruction::ORs(1, 4, ArithmeticOperand::RegB)),
-			0xB1 => Some(Instruction::ORs(1, 4, ArithmeticOperand::RegC)),
-			0xB2 => Some(Instruction::ORs(1, 4, ArithmeticOperand::RegD)),
-			0xB3 => Some(Instruction::ORs(1, 4, ArithmeticOperand::RegE)),
-			0xB4 => Some(Instruction::ORs(1, 4, ArithmeticOperand::RegH)),
-			0xB5 => Some(Instruction::ORs(1, 4, ArithmeticOperand::RegL)),
-			0xB6 => Some(Instruction::ORs(1, 8, ArithmeticOperand::HLPointee)),
-			0xB7 => Some(Instruction::ORs(1, 4, ArithmeticOperand::RegA)),
-			0xB8 => Some(Instruction::CPs(1, 4, ArithmeticOperand::RegB)),
-			0xB9 => Some(Instruction::CPs(1, 4, ArithmeticOperand::RegC)),
-			0xBA => Some(Instruction::CPs(1, 4, ArithmeticOperand::RegD)),
-			0xBB => Some(Instruction::CPs(1, 4, ArithmeticOperand::RegE)),
-			0xBC => Some(Instruction::CPs(1, 4, ArithmeticOperand::RegH)),
-			0xBD => Some(Instruction::CPs(1, 4, ArithmeticOperand::RegL)),
-			0xBE => Some(Instruction::CPs(1, 8, ArithmeticOperand::HLPointee)),
-			0xBF => Some(Instruction::CPs(1, 4, ArithmeticOperand::RegA)),
+			0x80 => Some(Instruction::ADDAs(1, 4, Regs::RegB)),
+			0x81 => Some(Instruction::ADDAs(1, 4, Regs::RegC)),
+			0x82 => Some(Instruction::ADDAs(1, 4, Regs::RegD)),
+			0x83 => Some(Instruction::ADDAs(1, 4, Regs::RegE)),
+			0x84 => Some(Instruction::ADDAs(1, 4, Regs::RegH)),
+			0x85 => Some(Instruction::ADDAs(1, 4, Regs::RegL)),
+			0x86 => Some(Instruction::ADDAs(1, 8, Regs::HLPointee)),
+			0x87 => Some(Instruction::ADDAs(1, 4, Regs::RegA)),
+			0x88 => Some(Instruction::ADCAs(1, 4, Regs::RegB)),
+			0x89 => Some(Instruction::ADCAs(1, 4, Regs::RegC)),
+			0x8A => Some(Instruction::ADCAs(1, 4, Regs::RegD)),
+			0x8B => Some(Instruction::ADCAs(1, 4, Regs::RegE)),
+			0x8C => Some(Instruction::ADCAs(1, 4, Regs::RegH)),
+			0x8D => Some(Instruction::ADCAs(1, 4, Regs::RegL)),
+			0x8E => Some(Instruction::ADCAs(1, 8, Regs::HLPointee)),
+			0x8F => Some(Instruction::ADCAs(1, 4, Regs::RegA)),
+			0x90 => Some(Instruction::SUBs(1, 4, Regs::RegB)),
+			0x91 => Some(Instruction::SUBs(1, 4, Regs::RegC)),
+			0x92 => Some(Instruction::SUBs(1, 4, Regs::RegD)),
+			0x93 => Some(Instruction::SUBs(1, 4, Regs::RegE)),
+			0x94 => Some(Instruction::SUBs(1, 4, Regs::RegH)),
+			0x95 => Some(Instruction::SUBs(1, 4, Regs::RegL)),
+			0x96 => Some(Instruction::SUBs(1, 8, Regs::HLPointee)),
+			0x97 => Some(Instruction::SUBs(1, 4, Regs::RegA)),
+			0x98 => Some(Instruction::SBCAs(1, 4, Regs::RegB)),
+			0x99 => Some(Instruction::SBCAs(1, 4, Regs::RegC)),
+			0x9A => Some(Instruction::SBCAs(1, 4, Regs::RegD)),
+			0x9B => Some(Instruction::SBCAs(1, 4, Regs::RegE)),
+			0x9C => Some(Instruction::SBCAs(1, 4, Regs::RegH)),
+			0x9D => Some(Instruction::SBCAs(1, 4, Regs::RegL)),
+			0x9E => Some(Instruction::SBCAs(1, 8, Regs::HLPointee)),
+			0x9F => Some(Instruction::SBCAs(1, 4, Regs::RegA)),
+			0xA0 => Some(Instruction::ANDs(1, 4, Regs::RegB)),
+			0xA1 => Some(Instruction::ANDs(1, 4, Regs::RegC)),
+			0xA2 => Some(Instruction::ANDs(1, 4, Regs::RegD)),
+			0xA3 => Some(Instruction::ANDs(1, 4, Regs::RegE)),
+			0xA4 => Some(Instruction::ANDs(1, 4, Regs::RegH)),
+			0xA5 => Some(Instruction::ANDs(1, 4, Regs::RegL)),
+			0xA6 => Some(Instruction::ANDs(1, 8, Regs::HLPointee)),
+			0xA7 => Some(Instruction::ANDs(1, 4, Regs::RegA)),
+			0xA8 => Some(Instruction::XORs(1, 4, Regs::RegB)),
+			0xA9 => Some(Instruction::XORs(1, 4, Regs::RegC)),
+			0xAA => Some(Instruction::XORs(1, 4, Regs::RegD)),
+			0xAB => Some(Instruction::XORs(1, 4, Regs::RegE)),
+			0xAC => Some(Instruction::XORs(1, 4, Regs::RegH)),
+			0xAD => Some(Instruction::XORs(1, 4, Regs::RegL)),
+			0xAE => Some(Instruction::XORs(1, 8, Regs::HLPointee)),
+			0xAF => Some(Instruction::XORs(1, 4, Regs::RegA)),
+			0xB0 => Some(Instruction::ORs(1, 4, Regs::RegB)),
+			0xB1 => Some(Instruction::ORs(1, 4, Regs::RegC)),
+			0xB2 => Some(Instruction::ORs(1, 4, Regs::RegD)),
+			0xB3 => Some(Instruction::ORs(1, 4, Regs::RegE)),
+			0xB4 => Some(Instruction::ORs(1, 4, Regs::RegH)),
+			0xB5 => Some(Instruction::ORs(1, 4, Regs::RegL)),
+			0xB6 => Some(Instruction::ORs(1, 8, Regs::HLPointee)),
+			0xB7 => Some(Instruction::ORs(1, 4, Regs::RegA)),
+			0xB8 => Some(Instruction::CPs(1, 4, Regs::RegB)),
+			0xB9 => Some(Instruction::CPs(1, 4, Regs::RegC)),
+			0xBA => Some(Instruction::CPs(1, 4, Regs::RegD)),
+			0xBB => Some(Instruction::CPs(1, 4, Regs::RegE)),
+			0xBC => Some(Instruction::CPs(1, 4, Regs::RegH)),
+			0xBD => Some(Instruction::CPs(1, 4, Regs::RegL)),
+			0xBE => Some(Instruction::CPs(1, 8, Regs::HLPointee)),
+			0xBF => Some(Instruction::CPs(1, 4, Regs::RegA)),
 			0xC0 => Some(Instruction::RETf(1, 8, JumpCondition::NotZero)),
 			0xC1 => Some(Instruction::POP(1, 12, RegPairs::RegsBC)),
 			0xC2 => Some(Instruction::JPfnn(3, 12, JumpCondition::NotZero)),
 			0xC3 => Some(Instruction::JPnn(3, 16)),
 			0xC4 => Some(Instruction::CALLf(3, 12, JumpCondition::NotZero)),
 			0xC5 => Some(Instruction::PUSH(1, 16, RegPairs::RegsBC)),
-			0xC6 => Some(Instruction::ADDAs(2, 8, ArithmeticOperand::ByteFromPC)),
+			0xC6 => Some(Instruction::ADDAs(2, 8, Regs::ByteFromPC)),
 			0xC7 => Some(Instruction::RST(1, 16, ResetLocation::Hex00)),
 			0xC8 => Some(Instruction::RETf(1, 8, JumpCondition::Zero)),
 			0xC9 => Some(Instruction::RET(1, 16)),
@@ -288,44 +279,44 @@ impl Instruction {
 			0xCB => Self::from_cb_opcode(cpu.fetch_pc()),
 			0xCC => Some(Instruction::CALLf(3, 12, JumpCondition::Zero)),
 			0xCD => Some(Instruction::CALL(3, 24)),
-			0xCE => Some(Instruction::ADCAs(2, 8, ArithmeticOperand::ByteFromPC)),
+			0xCE => Some(Instruction::ADCAs(2, 8, Regs::ByteFromPC)),
 			0xCF => Some(Instruction::RST(1, 16, ResetLocation::Hex08)),
 			0xD0 => Some(Instruction::RETf(1, 8, JumpCondition::NotCarry)),
 			0xD1 => Some(Instruction::POP(1, 12, RegPairs::RegsDE)),
 			0xD2 => Some(Instruction::JPfnn(3, 12, JumpCondition::NotCarry)),
 			0xD4 => Some(Instruction::CALLf(3, 12, JumpCondition::NotCarry)),
 			0xD5 => Some(Instruction::PUSH(1, 16, RegPairs::RegsDE)),
-			0xD6 => Some(Instruction::SUBs(2, 8, ArithmeticOperand::ByteFromPC)),
+			0xD6 => Some(Instruction::SUBs(2, 8, Regs::ByteFromPC)),
 			0xD7 => Some(Instruction::RST(1, 16, ResetLocation::Hex10)),
 			0xD8 => Some(Instruction::RETf(1, 8, JumpCondition::Carry)),
 			0xD9 => Some(Instruction::RETI(1, 16)),
 			0xDA => Some(Instruction::JPfnn(3, 12, JumpCondition::Carry)),
 			0xDC => Some(Instruction::CALLf(3, 12, JumpCondition::Carry)),
-			0xDE => Some(Instruction::SBCAs(2, 8, ArithmeticOperand::ByteFromPC)),
+			0xDE => Some(Instruction::SBCAs(2, 8, Regs::ByteFromPC)),
 			0xDF => Some(Instruction::RST(1, 16, ResetLocation::Hex18)),
 			0xE0 => Some(Instruction::LD(2, 12, Regs::UpperRamOffsetFromPC, Regs::RegA)),
 			0xE1 => Some(Instruction::POP(1, 12, RegPairs::RegsHL)),
 			0xE2 => Some(Instruction::LD(1, 8, Regs::UpperRamOffsetFromRegC, Regs::RegA)),
 			0xE5 => Some(Instruction::PUSH(1, 16, RegPairs::RegsHL)),
-			0xE6 => Some(Instruction::ANDs(2, 8, ArithmeticOperand::ByteFromPC)),
+			0xE6 => Some(Instruction::ANDs(2, 8, Regs::ByteFromPC)),
 			0xE7 => Some(Instruction::RST(1, 16, ResetLocation::Hex20)),
 			0xE8 => Some(Instruction::ADDSPe(2, 16)),
 			0xE9 => Some(Instruction::JPHL(1, 4)),
 			0xEA => Some(Instruction::LD(3, 16, Regs::BytesFromPCPointee, Regs::RegA)),
-			0xEE => Some(Instruction::XORs(2, 8, ArithmeticOperand::ByteFromPC)),
+			0xEE => Some(Instruction::XORs(2, 8, Regs::ByteFromPC)),
 			0xEF => Some(Instruction::RST(1, 16, ResetLocation::Hex28)),
 			0xF0 => Some(Instruction::LD(2, 12, Regs::RegA, Regs::UpperRamOffsetFromPC)),
 			0xF1 => Some(Instruction::POP(1, 12, RegPairs::RegsAF)),
 			0xF2 => Some(Instruction::LD(1, 8, Regs::RegA, Regs::UpperRamOffsetFromRegC)),
 			0xF3 => Some(Instruction::DI(1, 4)),
 			0xF5 => Some(Instruction::PUSH(1, 16, RegPairs::RegsAF)),
-			0xF6 => Some(Instruction::ORs(2, 8, ArithmeticOperand::ByteFromPC)),
+			0xF6 => Some(Instruction::ORs(2, 8, Regs::ByteFromPC)),
 			0xF7 => Some(Instruction::RST(1, 16, ResetLocation::Hex30)),
 			0xF8 => Some(Instruction::LDHLSPe(2, 12)),
 			0xF9 => Some(Instruction::LD16(1, 8, RegPairs::RegSP, RegPairs::RegsHL)),
 			0xFA => Some(Instruction::LD(3, 16, Regs::RegA, Regs::BytesFromPCPointee)),
 			0xFB => Some(Instruction::EI(1, 4)),
-			0xFE => Some(Instruction::CPs(2, 8, ArithmeticOperand::ByteFromPC)),
+			0xFE => Some(Instruction::CPs(2, 8, Regs::ByteFromPC)),
 			0xFF => Some(Instruction::RST(1, 16, ResetLocation::Hex38)),
 			0xD3 | 0xDB | 0xDD | 0xE3 | 0xE4 | 0xEB | 0xEC | 0xED | 0xF4 | 0xFC | 0xFD => None
 		}
@@ -338,27 +329,6 @@ impl Instruction {
 }
 
 impl Cpu {
-	pub fn get_operand_value(&mut self, operand: ArithmeticOperand) -> u8 {
-		match operand {
-			ArithmeticOperand::RegA => self.registers.a,
-			ArithmeticOperand::RegB => self.registers.b,
-			ArithmeticOperand::RegC => self.registers.c,
-			ArithmeticOperand::RegD => self.registers.d,
-			ArithmeticOperand::RegE => self.registers.e,
-			ArithmeticOperand::RegH => self.registers.h,
-			ArithmeticOperand::RegL => self.registers.l,
-			ArithmeticOperand::HLPointee => self.registers.get_hl_pointee(&self.memory_bus),
-			ArithmeticOperand::ByteFromPC => self.fetch_pc()
-		}
-	}
-	pub fn get_large_operand_value(&mut self, operand: LargeArithmeticOperand) -> u16 {
-		match operand {
-			LargeArithmeticOperand::RegsBC => self.registers.get_bc_big_endian(),
-			LargeArithmeticOperand::RegsDE => self.registers.get_de_big_endian(),
-			LargeArithmeticOperand::RegsHL => self.registers.get_hl_big_endian(),
-			LargeArithmeticOperand::RegSP => self.registers.stack_pointer,
-		}
-	}
 	pub fn get_reg_value(&mut self, reg: Regs) -> u8 {
 		match reg {
 			Regs::RegA => self.registers.a,
@@ -483,7 +453,7 @@ impl Cpu {
 			}
 			Instruction::ADDAs(_, _, _operand) | Instruction::ADCAs(_, _, _operand) => {
 				let reg_a_content = self.registers.a as u16;
-				let operand_val = self.get_operand_value(_operand) as u16;
+				let operand_val = self.get_reg_value(_operand) as u16;
 				// if instr is ADC and carry flag is true, let carry = 1;
 				let carry_val = if let Instruction::ADCAs(_, _, _) = instruction {self.registers.f.carry as u16} else {0};
 				let r = reg_a_content + operand_val + carry_val;
@@ -495,7 +465,7 @@ impl Cpu {
 			}
 			Instruction::SUBs(_, _, _operand) | Instruction::SBCAs(_, _, _operand) => {
 				let reg_a_content = self.registers.a as u16;
-				let operand_val = self.get_operand_value(_operand) as u16;
+				let operand_val = self.get_reg_value(_operand) as u16;
 				// if instr is ADC and carry flag is true, let carry = 1;
 				let carry_val = if let Instruction::SBCAs(_, _, _) = instruction {self.registers.f.carry as u16} else {0};
 				let r = reg_a_content.overflowing_sub(operand_val + carry_val).0;
@@ -506,7 +476,7 @@ impl Cpu {
 				self.registers.a = r as u8;
 			}
 			Instruction::ANDs(_, _, _operand) => {
-				let operand_val = self.get_operand_value(_operand);
+				let operand_val = self.get_reg_value(_operand);
 				self.registers.a &= operand_val;
 				self.registers.f.zero = self.registers.a == 0;
 				self.registers.f.substract = false;
@@ -514,7 +484,7 @@ impl Cpu {
 				self.registers.f.carry = false;
 			}
 			Instruction::XORs(_, _, _operand) => {
-				let operand_val = self.get_operand_value(_operand);
+				let operand_val = self.get_reg_value(_operand);
 				self.registers.a ^= operand_val;
 				self.registers.f.zero = self.registers.a == 0;
 				self.registers.f.substract = false;
@@ -522,7 +492,7 @@ impl Cpu {
 				self.registers.f.carry = false;
 			}
 			Instruction::ORs(_, _, _operand) => {
-				let operand_val = self.get_operand_value(_operand);
+				let operand_val = self.get_reg_value(_operand);
 				self.registers.a |= operand_val;
 				self.registers.f.zero = self.registers.a == 0;
 				self.registers.f.substract = false;
@@ -531,7 +501,7 @@ impl Cpu {
 			}
 			Instruction::CPs(_, _, _operand) => {
 				let reg_a_content = self.registers.a as u16;
-				let operand_val = self.get_operand_value(_operand) as u16;
+				let operand_val = self.get_reg_value(_operand) as u16;
 				let r = reg_a_content.overflowing_sub(operand_val).0;
 				self.registers.f.zero = r as u8 == 0;
 				self.registers.f.substract = true;
@@ -562,7 +532,7 @@ impl Cpu {
 			}
 			Instruction::ADDHLss(_, _, _operand) => {
 				let hl_value = self.registers.get_hl_big_endian();
-				let operand_value = self.get_large_operand_value(_operand);
+				let operand_value = self.get_reg_pair_big_endian_value(_operand);
 				let r = hl_value.overflowing_add(operand_value).0;
 				self.registers.f.substract = false;
 				self.registers.f.half_carry = (hl_value & 0x0FFF) + (operand_value & 0x0FFF) >= 0x1000;
@@ -780,18 +750,18 @@ impl Cpu {
 
 #[cfg(test)]
 mod tests {
-	use crate::{*, cpu::{registers::FlagsRegister, instructions::LargeArithmeticOperand}};
+	use crate::{*, cpu::{registers::FlagsRegister, instructions::RegPairs}};
 
-use super::{Instruction, ArithmeticOperand};
+use super::{Instruction, Regs};
 	fn test_adds(cpu: &mut Cpu, init_a_value: u8, expected_res: u8, expected_flag_reg: FlagsRegister) {
-		cpu.current_op = Some(Instruction::ADDAs(1, 4, ArithmeticOperand::RegA));
+		cpu.current_op = Some(Instruction::ADDAs(1, 4, Regs::RegA));
 		cpu.registers.a = init_a_value;
 		cpu.exec_current_op();
 		assert_eq!(cpu.registers.a, expected_res);
 		assert_eq!(cpu.registers.f, expected_flag_reg);
 	}
 	fn test_sub(cpu: &mut Cpu, init_a_value: u8, operand: u8, expected_res: u8, expected_flag_reg: FlagsRegister) {
-		cpu.current_op = Some(Instruction::SUBs(1, 4, ArithmeticOperand::RegB));
+		cpu.current_op = Some(Instruction::SUBs(1, 4, Regs::RegB));
 		cpu.registers.a = init_a_value;
 		cpu.registers.b = operand;
 		cpu.exec_current_op();
@@ -799,14 +769,14 @@ use super::{Instruction, ArithmeticOperand};
 		assert_eq!(cpu.registers.f, expected_flag_reg);
 	}
 	fn test_cps(cpu: &mut Cpu, init_a_value: u8, operand: u8, expected_flag_reg: FlagsRegister) {
-		cpu.current_op = Some(Instruction::CPs(1, 4, ArithmeticOperand::RegB));
+		cpu.current_op = Some(Instruction::CPs(1, 4, Regs::RegB));
 		cpu.registers.a = init_a_value;
 		cpu.registers.b = operand;
 		cpu.exec_current_op();
 		assert_eq!(cpu.registers.f, expected_flag_reg);
 	}
 	fn test_addhlss(cpu: &mut Cpu, init_hl_value: u16, expected_res: u16, expected_flag_reg: FlagsRegister) {
-		cpu.current_op = Some(Instruction::ADDHLss(1, 8, LargeArithmeticOperand::RegsHL));
+		cpu.current_op = Some(Instruction::ADDHLss(1, 8, RegPairs::RegsHL));
 		cpu.registers.set_hl_big_endian(init_hl_value);
 		cpu.exec_current_op();
 		assert_eq!(cpu.registers.get_hl_big_endian(), expected_res);
