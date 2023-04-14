@@ -14,7 +14,7 @@ pub enum CpuState{
 //#[derive(Debug)]
 pub struct Cpu {
 	registers: Registers,
-	memory_bus: MemoryBus,
+	pub memory_bus: MemoryBus,
 	pub current_op: Option<Instruction>,
 	pub next_op: Option<Instruction>,
 	ime_scheduled: bool,
