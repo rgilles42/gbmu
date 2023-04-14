@@ -1,6 +1,7 @@
 pub mod registers;
 pub mod instructions;
 pub mod memory_bus;
+use std::fmt::Debug;
 use registers::Registers;
 use memory_bus::MemoryBus;
 use instructions::Instruction;
@@ -10,12 +11,12 @@ pub enum CpuState{
 	Running, Halted, Stopped
 }
 
-#[derive(Debug)]
+//#[derive(Debug)]
 pub struct Cpu {
 	registers: Registers,
 	memory_bus: MemoryBus,
-	current_op: Option<Instruction>,
-	next_op: Option<Instruction>,
+	pub current_op: Option<Instruction>,
+	pub next_op: Option<Instruction>,
 	ime_scheduled: bool,
 	ime_set: bool,
 	state: CpuState
@@ -59,4 +60,10 @@ impl Cpu {
 		self.registers.program_counter = self.registers.program_counter.overflowing_add(1).0;
 		data
 	}
+}
+
+impl Debug for Cpu {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Cpu").field("registers", &self.registers).field("current_op", &self.current_op).finish()
+    }
 }

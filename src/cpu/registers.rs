@@ -1,4 +1,5 @@
 use super::memory_bus::MemoryBus;
+use std::{fmt::Debug, ops::Sub};
 
 const FLAG_Z_BYTE_POS:	u8 = 7;
 const FLAG_N_BYTE_POS:	u8 = 6;
@@ -37,7 +38,7 @@ impl std::convert::From<u8> for FlagsRegister {
 	}
 }
 
-#[derive(Debug)]
+//#[derive(Debug)]
 pub struct Registers {
 	pub a: u8,
 	pub f: FlagsRegister,
@@ -139,4 +140,10 @@ impl Registers {
 	pub fn set_hl_pointee(&self, memory_bus: &mut MemoryBus, data: u8) {
 		memory_bus.write_byte(self.get_hl_big_endian(), data)
 	}
+}
+
+impl Debug for Registers {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Registers").field("program_counter - 1", &self.program_counter.sub(1)).field("a", &self.a).field("bc", &self.get_bc_big_endian()).field("de", &self.get_de_big_endian()).field("hl", &self.get_hl_big_endian()).finish()
+    }
 }
