@@ -26,20 +26,21 @@ impl Cpu {
 		let mut cpu = Cpu {
 			registers: Registers::new(),
     		memory_bus: MemoryBus::new(),
-    		current_op: Some(Instruction::NOP(1, 1)),				// Fake 'execute' of first tick which is just a 'fetch' 
-			next_op: None,
+    		current_op: None,
+			next_op: Some(Instruction::NOP(1, 1)),				// Fake 'execute' of first tick which is just a 'fetch' 
 			ime_scheduled: false,
 			ime_set: false,
 			state: CpuState::Running
 		};
-		cpu.registers.init();
-		cpu.memory_bus.init();
+		// cpu.registers.init();
+		// cpu.memory_bus.init();
+		cpu.memory_bus.load_dmg_bootrom();
 		cpu
 	}
 	pub fn tick(&mut self) {
+		self.current_op = self.next_op;								// Account for Sharp SM83 fetch/execute overlap
 		self.exec_current_op();
 		self.fetch_next_opcode();									// Account for Sharp SM83 fetch/execute overlap
-		self.current_op = self.next_op;
 	}
 	fn fetch_next_opcode(&mut self) {
 		self.next_op = Instruction::from_opcode(self.fetch_pc(), self);
