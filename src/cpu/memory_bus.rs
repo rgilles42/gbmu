@@ -1,4 +1,4 @@
-mod video_ram;
+pub mod video_ram;
 use self::video_ram::VideoRam;
 use std::fmt::Debug;
 

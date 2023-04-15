@@ -8,11 +8,11 @@ pub enum TilePixel {
 pub type TileRow = [TilePixel; 8];
 pub type Tile = [TileRow; 8];
 pub struct VideoRam {
-	is_locked: bool,
+	pub is_locked: bool,
 	video_ram: [u8; 0x2000],
-	tiles: [[Tile; 0x80]; 3],			// 0x8000 - 0x97FF
-	bg_tilemap0: [[u8; 0x20]; 0x20],	// 0x9800 - 0x9BFF
-	bg_tilemap1: [[u8; 0x20]; 0x20],	// 0x9C00 - 0x9FFF
+	pub tiles: [[Tile; 0x80]; 3],			// 0x8000 - 0x97FF
+	pub bg_tilemap0: [[u8; 0x20]; 0x20],	// 0x9800 - 0x9BFF
+	pub bg_tilemap1: [[u8; 0x20]; 0x20],	// 0x9C00 - 0x9FFF
 }
 
 impl VideoRam {
