@@ -1,3 +1,5 @@
+use crate::memory_bus::{self, MemoryBus};
+
 use super::{Cpu, CpuState};
 
 type InstrLength = u8;
@@ -83,7 +85,7 @@ pub enum Instruction {
 }
 
 impl Instruction {
-	pub fn from_opcode(opcode: u8, cpu: &mut Cpu) -> Option<Instruction> {
+	pub fn from_opcode(opcode: u8, cpu: &mut Cpu, memory_bus: &MemoryBus) -> Option<Instruction> {
 		match opcode {
 			0x00 => Some(Instruction::NOP(1, 4)),
 			0x01 => Some(Instruction::LD16(3, 12, RegPairs::RegsBC, RegPairs::BytesFromPC)),
@@ -288,7 +290,7 @@ impl Instruction {
 			0xC8 => Some(Instruction::RETf(1, 8, JumpCondition::Zero)),
 			0xC9 => Some(Instruction::RET(1, 16)),
 			0xCA => Some(Instruction::JPfnn(3, 12, JumpCondition::Zero)),
-			0xCB => Self::from_cb_opcode(cpu.fetch_pc()),
+			0xCB => Self::from_cb_opcode(cpu.fetch_pc(memory_bus)),
 			0xCC => Some(Instruction::CALLf(3, 12, JumpCondition::Zero)),
 			0xCD => Some(Instruction::CALL(3, 24)),
 			0xCE => Some(Instruction::ADCAs(2, 8, Regs::ByteFromPC)),
@@ -427,8 +429,8 @@ impl Instruction {
 	}
 }
 
-impl Cpu<'_> {
-	pub fn get_reg_value(&mut self, reg: Regs) -> u8 {
+impl Cpu {
+	pub fn get_reg_value(&mut self, memory_bus: &MemoryBus, reg: Regs) -> u8 {
 		match reg {
 			Regs::RegA => self.registers.a,
 			Regs::RegB => self.registers.b,
@@ -437,22 +439,22 @@ impl Cpu<'_> {
 			Regs::RegE => self.registers.e,
 			Regs::RegH => self.registers.h,
 			Regs::RegL => self.registers.l,
-			Regs::HLPointee => self.registers.get_hl_pointee(&self.memory_bus),
-			Regs::BCPointee => self.registers.get_bc_pointee(&self.memory_bus),
-			Regs::DEPointee => self.registers.get_de_pointee(&self.memory_bus),
+			Regs::HLPointee => self.registers.get_hl_pointee(memory_bus),
+			Regs::BCPointee => self.registers.get_bc_pointee(memory_bus),
+			Regs::DEPointee => self.registers.get_de_pointee(memory_bus),
 			Regs::BytesFromPCPointee => {
-				let address = self.fetch_pc() as u16 | ((self.fetch_pc() as u16) << 8);
-				self.memory_bus.read_byte(address)
+				let address = self.fetch_pc(memory_bus) as u16 | ((self.fetch_pc(memory_bus) as u16) << 8);
+				memory_bus.read_byte(address)
 			}
 			Regs::UpperRamOffsetFromPC => {
-				let address = 0xFF00 + self.fetch_pc() as u16;
-				self.memory_bus.read_byte(address)
+				let address = 0xFF00 + self.fetch_pc(memory_bus) as u16;
+				memory_bus.read_byte(address)
 			}
-			Regs::UpperRamOffsetFromRegC => self.memory_bus.read_byte(0xFF00 + self.registers.c as u16),
-			Regs::ByteFromPC => self.fetch_pc()
+			Regs::UpperRamOffsetFromRegC => memory_bus.read_byte(0xFF00 + self.registers.c as u16),
+			Regs::ByteFromPC => self.fetch_pc(memory_bus)
 		}
 	}
-	pub fn set_reg_value(&mut self, reg: Regs, data: u8) {
+	pub fn set_reg_value(&mut self, memory_bus: &mut MemoryBus, reg: Regs, data: u8) {
 		match reg {
 			Regs::RegA => {self.registers.a = data}
 			Regs::RegB => {self.registers.b = data}
@@ -461,37 +463,37 @@ impl Cpu<'_> {
 			Regs::RegE => {self.registers.e = data}
 			Regs::RegH => {self.registers.h = data}
 			Regs::RegL => {self.registers.l = data}
-			Regs::HLPointee => {self.registers.set_hl_pointee(&mut self.memory_bus, data)}
-			Regs::BCPointee => {self.registers.set_bc_pointee(&mut self.memory_bus, data)},
-			Regs::DEPointee => {self.registers.set_de_pointee(&mut self.memory_bus, data)},
+			Regs::HLPointee => {self.registers.set_hl_pointee(memory_bus, data)}
+			Regs::BCPointee => {self.registers.set_bc_pointee(memory_bus, data)},
+			Regs::DEPointee => {self.registers.set_de_pointee(memory_bus, data)},
 			Regs::BytesFromPCPointee => {
-				let address = self.fetch_pc() as u16 | ((self.fetch_pc() as u16) << 8);
-				self.memory_bus.write_byte(address, data)
+				let address = self.fetch_pc(memory_bus) as u16 | ((self.fetch_pc(memory_bus) as u16) << 8);
+				memory_bus.write_byte(address, data)
 			}
 			Regs::UpperRamOffsetFromPC => {
-				let address = 0xFF00 + self.fetch_pc() as u16;
-				self.memory_bus.write_byte(address, data)
+				let address = 0xFF00 + self.fetch_pc(memory_bus) as u16;
+				memory_bus.write_byte(address, data)
 			}
-			Regs::UpperRamOffsetFromRegC => {self.memory_bus.write_byte(0xFF00 + self.registers.c as u16, data)},
+			Regs::UpperRamOffsetFromRegC => {memory_bus.write_byte(0xFF00 + self.registers.c as u16, data)},
 			Regs::ByteFromPC => {println!("SHOULD NEVER HAPPEN")}
 		}
 	}
-	pub fn get_reg_pair_big_endian_value(&mut self, reg_pair: RegPairs) -> u16 {
+	pub fn get_reg_pair_big_endian_value(&mut self, memory_bus: &MemoryBus, reg_pair: RegPairs) -> u16 {
 		match reg_pair {
 			RegPairs::RegsAF => self.registers.get_af_big_endian(),
 			RegPairs::RegsBC => self.registers.get_bc_big_endian(),
 			RegPairs::RegsDE => self.registers.get_de_big_endian(),
 			RegPairs::RegsHL => self.registers.get_hl_big_endian(),
 			RegPairs::RegSP => self.registers.stack_pointer,
-			RegPairs::BytesFromPC => { self.fetch_pc() as u16 | ((self.fetch_pc() as u16) << 8) },
+			RegPairs::BytesFromPC => { self.fetch_pc(memory_bus) as u16 | ((self.fetch_pc(memory_bus) as u16) << 8) },
 			RegPairs::BytesFromPCPointee => {
 				println!("SHOULD NEVER HAPPEN");
-				let address = self.fetch_pc() as u16 | ((self.fetch_pc() as u16) << 8);
-				self.memory_bus.read_byte(address) as u16 | ((self.memory_bus.read_byte(address.overflowing_add(1).0) as u16) << 8)
+				let address = self.fetch_pc(memory_bus) as u16 | ((self.fetch_pc(memory_bus) as u16) << 8);
+				memory_bus.read_byte(address) as u16 | ((memory_bus.read_byte(address.overflowing_add(1).0) as u16) << 8)
 			},
 		}
 	}
-	pub fn set_reg_pair_big_endian_value(&mut self, reg_pair: RegPairs, big_endian_value: u16) {
+	pub fn set_reg_pair_big_endian_value(&mut self, memory_bus: &mut MemoryBus, reg_pair: RegPairs, big_endian_value: u16) {
 		match reg_pair {
 			RegPairs::RegsAF => {self.registers.set_af_big_endian(big_endian_value)}
 			RegPairs::RegsBC => {self.registers.set_bc_big_endian(big_endian_value)}
@@ -499,37 +501,37 @@ impl Cpu<'_> {
 			RegPairs::RegsHL => {self.registers.set_hl_big_endian(big_endian_value)}
 			RegPairs::RegSP => {self.registers.stack_pointer = big_endian_value}
 			RegPairs::BytesFromPCPointee => {
-				let address = self.fetch_pc() as u16 | ((self.fetch_pc() as u16) << 8);
-				self.memory_bus.write_byte(address, big_endian_value as u8);
-				self.memory_bus.write_byte(address.overflowing_add(1).0, (big_endian_value >> 8) as u8);
+				let address = self.fetch_pc(memory_bus) as u16 | ((self.fetch_pc(memory_bus) as u16) << 8);
+				memory_bus.write_byte(address, big_endian_value as u8);
+				memory_bus.write_byte(address.overflowing_add(1).0, (big_endian_value >> 8) as u8);
 			},
 			RegPairs::BytesFromPC => {println!("SHOULD NEVER HAPPEN")},
 		}
 	}
-	pub fn execute_op(&mut self, instruction: Instruction) {
+	pub fn execute_op(&mut self, memory_bus: &mut MemoryBus, instruction: Instruction) {
 		match instruction {
 			Instruction::NOP(_, _) => {}
 			Instruction::LD(_, _, target, src) => {
-				let data = self.get_reg_value(src);
-				self.set_reg_value(target, data);
+				let data = self.get_reg_value(memory_bus, src);
+				self.set_reg_value(memory_bus, target, data);
 			}
 			Instruction::LDI(_, _, target, src) => {
-				let data = self.get_reg_value(src);
-				self.set_reg_value(target, data);
+				let data = self.get_reg_value(memory_bus, src);
+				self.set_reg_value(memory_bus, target, data);
 				self.registers.set_hl_big_endian(self.registers.get_hl_big_endian().overflowing_add(1).0);
 			}
 			Instruction::LDD(_, _, target, src) => {
-				let data = self.get_reg_value(src);
-				self.set_reg_value(target, data);
+				let data = self.get_reg_value(memory_bus, src);
+				self.set_reg_value(memory_bus, target, data);
 				self.registers.set_hl_big_endian(self.registers.get_hl_big_endian().overflowing_sub(1).0);
 			}
 			Instruction::LD16(_, _, target, src) => {
-				let data = self.get_reg_pair_big_endian_value(src);
-				self.set_reg_pair_big_endian_value(target, data);
+				let data = self.get_reg_pair_big_endian_value(memory_bus, src);
+				self.set_reg_pair_big_endian_value(memory_bus, target, data);
 			}
 			Instruction::LDHLSPe(_, _) => {
 				let sp_value = self.registers.stack_pointer;
-				let operand_value = self.fetch_pc() as i8 as u16;
+				let operand_value = self.fetch_pc(memory_bus) as i8 as u16;
 				let res = sp_value.overflowing_add(operand_value).0;
 				self.registers.f.zero = false;
 				self.registers.f.substract = false;
@@ -538,21 +540,21 @@ impl Cpu<'_> {
 				self.registers.set_hl_big_endian(res);
 			}
 			Instruction::PUSH(_, _, target) => {
-				let reg_content = self.get_reg_pair_big_endian_value(target);
-				self.memory_bus.write_byte(self.registers.stack_pointer.overflowing_sub(1).0, (reg_content >> 8) as u8);
-				self.memory_bus.write_byte(self.registers.stack_pointer.overflowing_sub(2).0, reg_content as u8);
+				let reg_content = self.get_reg_pair_big_endian_value(memory_bus, target);
+				memory_bus.write_byte(self.registers.stack_pointer.overflowing_sub(1).0, (reg_content >> 8) as u8);
+				memory_bus.write_byte(self.registers.stack_pointer.overflowing_sub(2).0, reg_content as u8);
 				self.registers.stack_pointer = self.registers.stack_pointer.overflowing_sub(2).0;
 			}
 			Instruction::POP(_, _, target) => {
 				let mut reg_content = 0x0000 as u16;
-				reg_content |= self.memory_bus.read_byte(self.registers.stack_pointer) as u16;
-				reg_content |= (self.memory_bus.read_byte(self.registers.stack_pointer.overflowing_add(1).0) as u16) << 8;
+				reg_content |= memory_bus.read_byte(self.registers.stack_pointer) as u16;
+				reg_content |= (memory_bus.read_byte(self.registers.stack_pointer.overflowing_add(1).0) as u16) << 8;
 				self.registers.stack_pointer = self.registers.stack_pointer.overflowing_add(2).0;
-				self.set_reg_pair_big_endian_value(target, reg_content);
+				self.set_reg_pair_big_endian_value(memory_bus, target, reg_content);
 			}
 			Instruction::ADDAs(_, _, _operand) | Instruction::ADCAs(_, _, _operand) => {
 				let reg_a_content = self.registers.a as u16;
-				let operand_val = self.get_reg_value(_operand) as u16;
+				let operand_val = self.get_reg_value(memory_bus, _operand) as u16;
 				// if instr is ADC and carry flag is true, let carry = 1;
 				let carry_val = if let Instruction::ADCAs(_, _, _) = instruction {self.registers.f.carry as u16} else {0};
 				let r = reg_a_content + operand_val + carry_val;
@@ -564,7 +566,7 @@ impl Cpu<'_> {
 			}
 			Instruction::SUBs(_, _, _operand) | Instruction::SBCAs(_, _, _operand) => {
 				let reg_a_content = self.registers.a as u16;
-				let operand_val = self.get_reg_value(_operand) as u16;
+				let operand_val = self.get_reg_value(memory_bus, _operand) as u16;
 				// if instr is ADC and carry flag is true, let carry = 1;
 				let carry_val = if let Instruction::SBCAs(_, _, _) = instruction {self.registers.f.carry as u16} else {0};
 				let r = reg_a_content.overflowing_sub(operand_val + carry_val).0;
@@ -575,7 +577,7 @@ impl Cpu<'_> {
 				self.registers.a = r as u8;
 			}
 			Instruction::ANDs(_, _, _operand) => {
-				let operand_val = self.get_reg_value(_operand);
+				let operand_val = self.get_reg_value(memory_bus, _operand);
 				self.registers.a &= operand_val;
 				self.registers.f.zero = self.registers.a == 0;
 				self.registers.f.substract = false;
@@ -583,7 +585,7 @@ impl Cpu<'_> {
 				self.registers.f.carry = false;
 			}
 			Instruction::XORs(_, _, _operand) => {
-				let operand_val = self.get_reg_value(_operand);
+				let operand_val = self.get_reg_value(memory_bus, _operand);
 				self.registers.a ^= operand_val;
 				self.registers.f.zero = self.registers.a == 0;
 				self.registers.f.substract = false;
@@ -591,7 +593,7 @@ impl Cpu<'_> {
 				self.registers.f.carry = false;
 			}
 			Instruction::ORs(_, _, _operand) => {
-				let operand_val = self.get_reg_value(_operand);
+				let operand_val = self.get_reg_value(memory_bus, _operand);
 				self.registers.a |= operand_val;
 				self.registers.f.zero = self.registers.a == 0;
 				self.registers.f.substract = false;
@@ -600,7 +602,7 @@ impl Cpu<'_> {
 			}
 			Instruction::CPs(_, _, _operand) => {
 				let reg_a_content = self.registers.a as u16;
-				let operand_val = self.get_reg_value(_operand) as u16;
+				let operand_val = self.get_reg_value(memory_bus, _operand) as u16;
 				let r = reg_a_content.overflowing_sub(operand_val).0;
 				self.registers.f.zero = r as u8 == 0;
 				self.registers.f.substract = true;
@@ -608,30 +610,30 @@ impl Cpu<'_> {
 				self.registers.f.carry = r & 0x100 != 0;
 			}
 			Instruction::INCs(_, _, _target) => {
-				let target_value = self.get_reg_value(_target);
+				let target_value = self.get_reg_value(memory_bus, _target);
 				self.registers.f.zero = target_value == 0xFF;
 				self.registers.f.substract = false;
 				self.registers.f.half_carry = (target_value & 0xF) + 1 >= 0x10;
-				self.set_reg_value(_target, target_value.overflowing_add(1).0);
+				self.set_reg_value(memory_bus, _target, target_value.overflowing_add(1).0);
 			}
 			Instruction::DECs(_, _, _target) => {
-				let target_value = self.get_reg_value(_target);
+				let target_value = self.get_reg_value(memory_bus, _target);
 				self.registers.f.zero = target_value == 0x01;
 				self.registers.f.substract = true;
 				self.registers.f.half_carry = target_value & 0xF < 1;
-				self.set_reg_value(_target, target_value.overflowing_sub(1).0);
+				self.set_reg_value(memory_bus, _target, target_value.overflowing_sub(1).0);
 			}
 			Instruction::INCss(_, _, _target) => {
-				let data = self.get_reg_pair_big_endian_value(_target).overflowing_add(1).0;
-				self.set_reg_pair_big_endian_value(_target, data);
+				let data = self.get_reg_pair_big_endian_value(memory_bus, _target).overflowing_add(1).0;
+				self.set_reg_pair_big_endian_value(memory_bus, _target, data);
 			}
 			Instruction::DECss(_, _, _target) => {
-				let data = self.get_reg_pair_big_endian_value(_target).overflowing_sub(1).0;
-				self.set_reg_pair_big_endian_value(_target, data);
+				let data = self.get_reg_pair_big_endian_value(memory_bus, _target).overflowing_sub(1).0;
+				self.set_reg_pair_big_endian_value(memory_bus, _target, data);
 			}
 			Instruction::ADDHLss(_, _, _operand) => {
 				let hl_value = self.registers.get_hl_big_endian();
-				let operand_value = self.get_reg_pair_big_endian_value(_operand);
+				let operand_value = self.get_reg_pair_big_endian_value(memory_bus, _operand);
 				let r = hl_value.overflowing_add(operand_value).0;
 				self.registers.f.substract = false;
 				self.registers.f.half_carry = (hl_value & 0x0FFF) + (operand_value & 0x0FFF) >= 0x1000;
@@ -640,7 +642,7 @@ impl Cpu<'_> {
 			}
 			Instruction::ADDSPe(_, _) => {
 				let sp_value = self.registers.stack_pointer;
-				let operand_value = self.fetch_pc() as i8 as u16;
+				let operand_value = self.fetch_pc(memory_bus) as i8 as u16;
 				let res = sp_value.overflowing_add(operand_value).0;
 				self.registers.f.zero = false;
 				self.registers.f.substract = false;
@@ -734,91 +736,91 @@ impl Cpu<'_> {
 				self.registers.f.substract = false;
 				self.registers.f.half_carry = false;
 				self.registers.f.carry = false;
-				let mut reg_content = (self.get_reg_value(target) as u16) << 1;
+				let mut reg_content = (self.get_reg_value(memory_bus, target) as u16) << 1;
 				if (reg_content & 0x0100) != 0 {
 					self.registers.f.carry = true;
 					reg_content += 1;
 				}
 				self.registers.f.zero = reg_content == 0;
-				self.set_reg_value(target, reg_content as u8);
+				self.set_reg_value(memory_bus, target, reg_content as u8);
 			}
 			Instruction::RL(_, _, target) => {
-				let mut reg_content = (self.get_reg_value(target) as u16) << 1;
+				let mut reg_content = (self.get_reg_value(memory_bus, target) as u16) << 1;
 				reg_content += if self.registers.f.carry {1} else {0};
 				self.registers.f.carry = (reg_content & 0x0100) != 0;
 				self.registers.f.zero = reg_content == 0;
 				self.registers.f.substract = false;
 				self.registers.f.half_carry = false;
-				self.set_reg_value(target, reg_content as u8);
+				self.set_reg_value(memory_bus, target, reg_content as u8);
 			}
 			Instruction::RRC(_, _, target) => {
 				self.registers.f.substract = false;
 				self.registers.f.half_carry = false;
 				self.registers.f.carry = false;
-				let mut reg_content = (self.get_reg_value(target) as u16) << 7;
+				let mut reg_content = (self.get_reg_value(memory_bus, target) as u16) << 7;
 				if (reg_content & 0x0080) != 0 {
 					self.registers.f.carry = true;
 					reg_content += 0x8000;
 				}
 				self.registers.f.zero = reg_content == 0;
-				self.set_reg_value(target, (reg_content >> 8) as u8);
+				self.set_reg_value(memory_bus, target, (reg_content >> 8) as u8);
 			}
 			Instruction::RR(_, _, target) => {
-				let mut reg_content = (self.get_reg_value(target) as u16) << 7;
+				let mut reg_content = (self.get_reg_value(memory_bus, target) as u16) << 7;
 				reg_content += if self.registers.f.carry {0x8000} else {0};
 				self.registers.f.carry = (reg_content & 0x0080) != 0;
 				self.registers.f.zero = reg_content == 0;
 				self.registers.f.substract = false;
 				self.registers.f.half_carry = false;
-				self.set_reg_value(target, (reg_content >> 8) as u8);
+				self.set_reg_value(memory_bus, target, (reg_content >> 8) as u8);
 			}
 			Instruction::SLA(_, _, target) => {
-				let reg_content = (self.get_reg_value(target) as u16) << 1;
+				let reg_content = (self.get_reg_value(memory_bus, target) as u16) << 1;
 				self.registers.f.carry = (reg_content & 0x0100) != 0;
 				self.registers.f.zero = reg_content == 0;
 				self.registers.f.substract = false;
 				self.registers.f.half_carry = false;
-				self.set_reg_value(target, reg_content as u8);
+				self.set_reg_value(memory_bus, target, reg_content as u8);
 			}
 			Instruction::SWAP(_, _, target) => {
-				let reg_content = self.get_reg_value(target);
+				let reg_content = self.get_reg_value(memory_bus, target);
 				let reg_content = reg_content << 4 | reg_content >> 4;
-				self.set_reg_value(target, reg_content);
+				self.set_reg_value(memory_bus, target, reg_content);
 			}
 			Instruction::SRA(_, _, target) => {
-				let mut reg_content = (self.get_reg_value(target) as u16) << 7;
+				let mut reg_content = (self.get_reg_value(memory_bus, target) as u16) << 7;
 				reg_content |= (reg_content & 0x4000) << 1;
 				self.registers.f.carry = (reg_content & 0x0080) != 0;
 				self.registers.f.zero = reg_content == 0;
 				self.registers.f.substract = false;
 				self.registers.f.half_carry = false;
-				self.set_reg_value(target, (reg_content >> 8) as u8);
+				self.set_reg_value(memory_bus, target, (reg_content >> 8) as u8);
 			}
 			Instruction::SRL(_, _, target) => {
-				let reg_content = (self.get_reg_value(target) as u16) << 7;
+				let reg_content = (self.get_reg_value(memory_bus, target) as u16) << 7;
 				self.registers.f.carry = (reg_content & 0x0080) != 0;
 				self.registers.f.zero = reg_content == 0;
 				self.registers.f.substract = false;
 				self.registers.f.half_carry = false;
-				self.set_reg_value(target, (reg_content >> 8) as u8);
+				self.set_reg_value(memory_bus, target, (reg_content >> 8) as u8);
 			}
 			Instruction::BIT(_, _, pos, target) => {
 				self.registers.f.substract = false;
 				self.registers.f.half_carry = true;
-				self.registers.f.zero = (self.get_reg_value(target) & (1 << pos)) == 0;
+				self.registers.f.zero = (self.get_reg_value(memory_bus, target) & (1 << pos)) == 0;
 			}
 			Instruction::SET(_, _, pos, target) => {
-				let reg_content = self.get_reg_value(target) | (1 << pos);
-				self.set_reg_value(target, reg_content);
+				let reg_content = self.get_reg_value(memory_bus, target) | (1 << pos);
+				self.set_reg_value(memory_bus, target, reg_content);
 			}
 			Instruction::RES(_, _, pos, target) => {
-				let reg_content = self.get_reg_value(target) & !(1 << pos);
-				self.set_reg_value(target, reg_content);
+				let reg_content = self.get_reg_value(memory_bus, target) & !(1 << pos);
+				self.set_reg_value(memory_bus, target, reg_content);
 			}
-			Instruction::JPnn(_, _) => self.registers.program_counter = self.get_reg_pair_big_endian_value(RegPairs::BytesFromPC),
+			Instruction::JPnn(_, _) => self.registers.program_counter = self.get_reg_pair_big_endian_value(memory_bus, RegPairs::BytesFromPC),
 			Instruction::JPHL(_, _) => self.registers.program_counter = self.registers.get_hl_big_endian(),
 			Instruction::JPfnn(len, _, condition) => {
-				let destination = self.get_reg_pair_big_endian_value(RegPairs::BytesFromPC);
+				let destination = self.get_reg_pair_big_endian_value(memory_bus, RegPairs::BytesFromPC);
 				let mut do_jump = false;
 				match condition {
 					JumpCondition::NotZero => {if !self.registers.f.zero {do_jump = true};}
@@ -832,11 +834,11 @@ impl Cpu<'_> {
 				}
 			}
 			Instruction::JR(_, _) => {
-				let operand_value = self.fetch_pc() as i8 as u16;
+				let operand_value = self.fetch_pc(memory_bus) as i8 as u16;
 				self.registers.program_counter = self.registers.program_counter.overflowing_add(operand_value).0;
 			}
 			Instruction::JRf(len, _, condition) => {
-				let operand_value = self.fetch_pc() as i8 as u16;
+				let operand_value = self.fetch_pc(memory_bus) as i8 as u16;
 				let mut do_jump = false;
 				match condition {
 					JumpCondition::NotZero => {if !self.registers.f.zero {do_jump = true};}
@@ -850,14 +852,14 @@ impl Cpu<'_> {
 				}
 			}
 			Instruction::CALL(_, _) => {
-				let address = self.get_reg_pair_big_endian_value(RegPairs::BytesFromPC);
-				self.memory_bus.write_byte(self.registers.stack_pointer.overflowing_sub(1).0, (self.registers.program_counter >> 8) as u8);
-				self.memory_bus.write_byte(self.registers.stack_pointer.overflowing_sub(2).0, self.registers.program_counter as u8);
+				let address = self.get_reg_pair_big_endian_value(memory_bus, RegPairs::BytesFromPC);
+				memory_bus.write_byte(self.registers.stack_pointer.overflowing_sub(1).0, (self.registers.program_counter >> 8) as u8);
+				memory_bus.write_byte(self.registers.stack_pointer.overflowing_sub(2).0, self.registers.program_counter as u8);
 				self.registers.stack_pointer = self.registers.stack_pointer.overflowing_sub(2).0;
 				self.registers.program_counter = address;
 			}
 			Instruction::CALLf(len, _, condition) => {
-				let address = self.get_reg_pair_big_endian_value(RegPairs::BytesFromPC);
+				let address = self.get_reg_pair_big_endian_value(memory_bus, RegPairs::BytesFromPC);
 				let mut do_call = false;
 				match condition {
 					JumpCondition::NotZero => {if !self.registers.f.zero {do_call = true};}
@@ -867,16 +869,16 @@ impl Cpu<'_> {
 				}
 				if do_call {
 					self.current_op = Some(Instruction::CALLf(len, 24, condition));
-					self.memory_bus.write_byte(self.registers.stack_pointer.overflowing_sub(1).0, (self.registers.program_counter >> 8) as u8);
-					self.memory_bus.write_byte(self.registers.stack_pointer.overflowing_sub(2).0, self.registers.program_counter as u8);
+					memory_bus.write_byte(self.registers.stack_pointer.overflowing_sub(1).0, (self.registers.program_counter >> 8) as u8);
+					memory_bus.write_byte(self.registers.stack_pointer.overflowing_sub(2).0, self.registers.program_counter as u8);
 					self.registers.stack_pointer = self.registers.stack_pointer.overflowing_sub(2).0;
 					self.registers.program_counter = address;
 				}
 			}
 			Instruction::RET(_, _) => {
 				let mut ret_pc = 0x0000 as u16;
-				ret_pc |= self.memory_bus.read_byte(self.registers.stack_pointer) as u16;
-				ret_pc |= (self.memory_bus.read_byte(self.registers.stack_pointer.overflowing_add(1).0) as u16) << 8;
+				ret_pc |= memory_bus.read_byte(self.registers.stack_pointer) as u16;
+				ret_pc |= (memory_bus.read_byte(self.registers.stack_pointer.overflowing_add(1).0) as u16) << 8;
 				self.registers.stack_pointer = self.registers.stack_pointer.overflowing_add(2).0;
 				self.registers.program_counter = ret_pc;
 			}
@@ -891,16 +893,16 @@ impl Cpu<'_> {
 				if do_call {
 					self.current_op = Some(Instruction::RETf(len, 20, condition));
 					let mut ret_pc = 0x0000 as u16;
-					ret_pc |= self.memory_bus.read_byte(self.registers.stack_pointer) as u16;
-					ret_pc |= (self.memory_bus.read_byte(self.registers.stack_pointer.overflowing_add(1).0) as u16) << 8;
+					ret_pc |= memory_bus.read_byte(self.registers.stack_pointer) as u16;
+					ret_pc |= (memory_bus.read_byte(self.registers.stack_pointer.overflowing_add(1).0) as u16) << 8;
 					self.registers.stack_pointer = self.registers.stack_pointer.overflowing_add(2).0;
 					self.registers.program_counter = ret_pc;
 				}
 			}
 			Instruction::RETI(_, _) => {
 				let mut ret_pc = 0x0000 as u16;
-				ret_pc |= self.memory_bus.read_byte(self.registers.stack_pointer) as u16;
-				ret_pc |= (self.memory_bus.read_byte(self.registers.stack_pointer.overflowing_add(1).0) as u16) << 8;
+				ret_pc |= memory_bus.read_byte(self.registers.stack_pointer) as u16;
+				ret_pc |= (memory_bus.read_byte(self.registers.stack_pointer.overflowing_add(1).0) as u16) << 8;
 				self.registers.stack_pointer = self.registers.stack_pointer.overflowing_add(2).0;
 				self.registers.program_counter = ret_pc;
 				self.ime_set = true;
@@ -916,14 +918,14 @@ impl Cpu<'_> {
 					ResetLocation::Hex30 => 0x30 as u16,
 					ResetLocation::Hex38 => 0x38 as u16,
 				};
-				self.memory_bus.write_byte(self.registers.stack_pointer.overflowing_sub(1).0, (self.registers.program_counter >> 8) as u8);
-				self.memory_bus.write_byte(self.registers.stack_pointer.overflowing_sub(2).0, self.registers.program_counter as u8);
+				memory_bus.write_byte(self.registers.stack_pointer.overflowing_sub(1).0, (self.registers.program_counter >> 8) as u8);
+				memory_bus.write_byte(self.registers.stack_pointer.overflowing_sub(2).0, self.registers.program_counter as u8);
 				self.registers.stack_pointer = self.registers.stack_pointer.overflowing_sub(2).0;
 				self.registers.program_counter = location;
 			}
 			Instruction::HALT(_, _) => {self.state = CpuState::Halted}
 			Instruction::STOP(_, _) => {
-				self.fetch_pc();
+				self.fetch_pc(memory_bus);
 				self.state = CpuState::Stopped
 			}
 			Instruction::DI(_, _) => {self.ime_set = false}
@@ -937,81 +939,81 @@ mod tests {
 	use crate::{*, cpu::{registers::FlagsRegister, instructions::RegPairs}};
 
 use super::{Instruction, Regs};
-	fn test_adds(cpu: &mut Cpu, init_a_value: u8, expected_res: u8, expected_flag_reg: FlagsRegister) {
+	fn test_adds(cpu: &mut Cpu, memory_bus: &mut MemoryBus, init_a_value: u8, expected_res: u8, expected_flag_reg: FlagsRegister) {
 		cpu.current_op = Some(Instruction::ADDAs(1, 4, Regs::RegA));
 		cpu.registers.a = init_a_value;
-		cpu.exec_current_op();
+		cpu.exec_current_op(memory_bus);
 		assert_eq!(cpu.registers.a, expected_res);
 		assert_eq!(cpu.registers.f, expected_flag_reg);
 	}
-	fn test_sub(cpu: &mut Cpu, init_a_value: u8, operand: u8, expected_res: u8, expected_flag_reg: FlagsRegister) {
+	fn test_sub(cpu: &mut Cpu, memory_bus: &mut MemoryBus, init_a_value: u8, operand: u8, expected_res: u8, expected_flag_reg: FlagsRegister) {
 		cpu.current_op = Some(Instruction::SUBs(1, 4, Regs::RegB));
 		cpu.registers.a = init_a_value;
 		cpu.registers.b = operand;
-		cpu.exec_current_op();
+		cpu.exec_current_op(memory_bus);
 		assert_eq!(cpu.registers.a, expected_res);
 		assert_eq!(cpu.registers.f, expected_flag_reg);
 	}
-	fn test_cps(cpu: &mut Cpu, init_a_value: u8, operand: u8, expected_flag_reg: FlagsRegister) {
+	fn test_cps(cpu: &mut Cpu, memory_bus: &mut MemoryBus, init_a_value: u8, operand: u8, expected_flag_reg: FlagsRegister) {
 		cpu.current_op = Some(Instruction::CPs(1, 4, Regs::RegB));
 		cpu.registers.a = init_a_value;
 		cpu.registers.b = operand;
-		cpu.exec_current_op();
+		cpu.exec_current_op(memory_bus);
 		assert_eq!(cpu.registers.f, expected_flag_reg);
 	}
-	fn test_addhlss(cpu: &mut Cpu, init_hl_value: u16, expected_res: u16, expected_flag_reg: FlagsRegister) {
+	fn test_addhlss(cpu: &mut Cpu, memory_bus: &mut MemoryBus, init_hl_value: u16, expected_res: u16, expected_flag_reg: FlagsRegister) {
 		cpu.current_op = Some(Instruction::ADDHLss(1, 8, RegPairs::RegsHL));
 		cpu.registers.set_hl_big_endian(init_hl_value);
-		cpu.exec_current_op();
+		cpu.exec_current_op(memory_bus);
 		assert_eq!(cpu.registers.get_hl_big_endian(), expected_res);
 		assert_eq!(cpu.registers.f, expected_flag_reg);
 	}
-	fn test_addspe(cpu: &mut Cpu, init_sp_value: u16, operand: i8, expected_res: u16, expected_flag_reg: FlagsRegister) {
+	fn test_addspe(cpu: &mut Cpu, memory_bus: &mut MemoryBus, init_sp_value: u16, operand: i8, expected_res: u16, expected_flag_reg: FlagsRegister) {
 		cpu.current_op = Some(Instruction::ADDSPe(2, 16));
 		cpu.registers.stack_pointer = init_sp_value;
-		cpu.memory_bus.write_byte(cpu.registers.program_counter, operand as u8);
-		cpu.exec_current_op();
+		memory_bus.write_byte(cpu.registers.program_counter, operand as u8);
+		cpu.exec_current_op(memory_bus);
 		assert_eq!(cpu.registers.stack_pointer, expected_res);
 		assert_eq!(cpu.registers.f, expected_flag_reg);
 	}
-	fn test_daa(cpu: &mut Cpu, expected_res: u8, expected_flag_reg: FlagsRegister) {
+	fn test_daa(cpu: &mut Cpu, memory_bus: &mut MemoryBus, expected_res: u8, expected_flag_reg: FlagsRegister) {
 		cpu.current_op = Some(Instruction::DAA(1, 4));
-		cpu.exec_current_op();
+		cpu.exec_current_op(memory_bus);
 		assert_eq!(cpu.registers.a, expected_res);
 		assert_eq!(cpu.registers.f, expected_flag_reg);
 	}
 	#[test]
 	fn test_arith() {
-		let memory_bus = RefCell::new(MemoryBus::new());
-		let mut my_cpu = Cpu::new(memory_bus.borrow_mut());
+		let mut memory_bus = MemoryBus::new();
+		let mut my_cpu = Cpu::new();
 		my_cpu.registers.program_counter = 0x100;				// avoid r/w on read-only bootrom area because it will make Byte(s)FromPC instructions unverifiable
-		test_adds(&mut my_cpu, 0x12, 0x24, 0x00.into());
-		test_adds(&mut my_cpu, 0x80, 0x00, FlagsRegister{ zero: true, substract: false, half_carry: false, carry: true });
-		test_adds(&mut my_cpu, 0xF1, 0xE2, FlagsRegister{ zero: false, substract: false, half_carry: false, carry: true });
-		test_adds(&mut my_cpu, 0xFF, 0xFE, FlagsRegister{ zero: false, substract: false, half_carry: true, carry: true });
-		test_sub(&mut my_cpu, 0xFF, 0x10, 0xEF, FlagsRegister{ zero: false, substract: true, half_carry: false, carry: false });
-		test_sub(&mut my_cpu, 0xFF, 0xFF, 0x00, FlagsRegister{ zero: true, substract: true, half_carry: false, carry: false });
-		test_sub(&mut my_cpu, 0xF1, 0x0F, 0xE2, FlagsRegister{ zero: false, substract: true, half_carry: true, carry: false });
-		test_sub(&mut my_cpu, 0x10, 0x20, 0xF0, FlagsRegister{ zero: false, substract: true, half_carry: false, carry: true });
-		test_sub(&mut my_cpu, 0x10, 0x21, 0xEF, FlagsRegister{ zero: false, substract: true, half_carry: true, carry: true });
-		test_cps(&mut my_cpu, 0xFF, 0x10, FlagsRegister{ zero: false, substract: true, half_carry: false, carry: false });
-		test_cps(&mut my_cpu, 0xFF, 0xFF, FlagsRegister{ zero: true, substract: true, half_carry: false, carry: false });
-		test_cps(&mut my_cpu, 0xF1, 0x0F, FlagsRegister{ zero: false, substract: true, half_carry: true, carry: false });
-		test_cps(&mut my_cpu, 0x10, 0x20, FlagsRegister{ zero: false, substract: true, half_carry: false, carry: true });
-		test_cps(&mut my_cpu, 0x10, 0x21, FlagsRegister{ zero: false, substract: true, half_carry: true, carry: true });
+		test_adds(&mut my_cpu, &mut memory_bus, 0x12, 0x24, 0x00.into());
+		test_adds(&mut my_cpu, &mut memory_bus, 0x80, 0x00, FlagsRegister{ zero: true, substract: false, half_carry: false, carry: true });
+		test_adds(&mut my_cpu, &mut memory_bus, 0xF1, 0xE2, FlagsRegister{ zero: false, substract: false, half_carry: false, carry: true });
+		test_adds(&mut my_cpu, &mut memory_bus, 0xFF, 0xFE, FlagsRegister{ zero: false, substract: false, half_carry: true, carry: true });
+		test_sub(&mut my_cpu, &mut memory_bus, 0xFF, 0x10, 0xEF, FlagsRegister{ zero: false, substract: true, half_carry: false, carry: false });
+		test_sub(&mut my_cpu, &mut memory_bus, 0xFF, 0xFF, 0x00, FlagsRegister{ zero: true, substract: true, half_carry: false, carry: false });
+		test_sub(&mut my_cpu, &mut memory_bus, 0xF1, 0x0F, 0xE2, FlagsRegister{ zero: false, substract: true, half_carry: true, carry: false });
+		test_sub(&mut my_cpu, &mut memory_bus, 0x10, 0x20, 0xF0, FlagsRegister{ zero: false, substract: true, half_carry: false, carry: true });
+		test_sub(&mut my_cpu, &mut memory_bus, 0x10, 0x21, 0xEF, FlagsRegister{ zero: false, substract: true, half_carry: true, carry: true });
+		test_cps(&mut my_cpu, &mut memory_bus, 0xFF, 0x10, FlagsRegister{ zero: false, substract: true, half_carry: false, carry: false });
+		test_cps(&mut my_cpu, &mut memory_bus, 0xFF, 0xFF, FlagsRegister{ zero: true, substract: true, half_carry: false, carry: false });
+		test_cps(&mut my_cpu, &mut memory_bus, 0xF1, 0x0F, FlagsRegister{ zero: false, substract: true, half_carry: true, carry: false });
+		test_cps(&mut my_cpu, &mut memory_bus, 0x10, 0x20, FlagsRegister{ zero: false, substract: true, half_carry: false, carry: true });
+		test_cps(&mut my_cpu, &mut memory_bus, 0x10, 0x21, FlagsRegister{ zero: false, substract: true, half_carry: true, carry: true });
 
-		test_addhlss(&mut my_cpu, 0x8A23, 0x1446, FlagsRegister{ zero: false, substract: false, half_carry: true, carry: true });
-		test_addhlss(&mut my_cpu, 0x0000, 0x0000, FlagsRegister{ zero: false, substract: false, half_carry: false, carry: false });
-		test_addspe(&mut my_cpu, 0xFFF8, 0x02, 0xFFFA, FlagsRegister{ zero: false, substract: false, half_carry: false, carry: false });
-		test_addspe(&mut my_cpu, 0xFF88, 0x0F, 0xFF97, FlagsRegister{ zero: false, substract: false, half_carry: true, carry: false });
-		test_addspe(&mut my_cpu, 0xF8D8, 0x2F, 0xF907, FlagsRegister{ zero: false, substract: false, half_carry: true, carry: true });
-		test_addspe(&mut my_cpu, 0xF8D8, -0x24, 0xF8B4, FlagsRegister{ zero: false, substract: false, half_carry: true, carry: true });
+		test_addhlss(&mut my_cpu, &mut memory_bus, 0x8A23, 0x1446, FlagsRegister{ zero: false, substract: false, half_carry: true, carry: true });
+		test_addhlss(&mut my_cpu, &mut memory_bus, 0x0000, 0x0000, FlagsRegister{ zero: false, substract: false, half_carry: false, carry: false });
+		test_addspe(&mut my_cpu, &mut memory_bus, 0xFFF8, 0x02, 0xFFFA, FlagsRegister{ zero: false, substract: false, half_carry: false, carry: false });
+		test_addspe(&mut my_cpu, &mut memory_bus, 0xFF88, 0x0F, 0xFF97, FlagsRegister{ zero: false, substract: false, half_carry: true, carry: false });
+		test_addspe(&mut my_cpu, &mut memory_bus, 0xF8D8, 0x2F, 0xF907, FlagsRegister{ zero: false, substract: false, half_carry: true, carry: true });
+		test_addspe(&mut my_cpu, &mut memory_bus, 0xF8D8, -0x24, 0xF8B4, FlagsRegister{ zero: false, substract: false, half_carry: true, carry: true });
 
-		test_adds(&mut my_cpu, 0x45, 0x8A, FlagsRegister{ zero: false, substract: false, half_carry: false, carry: false });
-		test_daa(&mut my_cpu, 0x90, FlagsRegister{ zero: false, substract: false, half_carry: false, carry: false });
-		test_adds(&mut my_cpu, 0x91, 0x22, FlagsRegister{ zero: false, substract: false, half_carry: false, carry: true });
-		test_daa(&mut my_cpu, 0x82, FlagsRegister{ zero: false, substract: false, half_carry: false, carry: true });
-		test_sub(&mut my_cpu, 0x83, 0x38, 0x4B, FlagsRegister{ zero: false, substract: true, half_carry: true, carry: false });
-		test_daa(&mut my_cpu, 0x45, FlagsRegister{ zero: false, substract: true, half_carry: false, carry: false });
+		test_adds(&mut my_cpu, &mut memory_bus, 0x45, 0x8A, FlagsRegister{ zero: false, substract: false, half_carry: false, carry: false });
+		test_daa(&mut my_cpu, &mut memory_bus, 0x90, FlagsRegister{ zero: false, substract: false, half_carry: false, carry: false });
+		test_adds(&mut my_cpu, &mut memory_bus, 0x91, 0x22, FlagsRegister{ zero: false, substract: false, half_carry: false, carry: true });
+		test_daa(&mut my_cpu, &mut memory_bus, 0x82, FlagsRegister{ zero: false, substract: false, half_carry: false, carry: true });
+		test_sub(&mut my_cpu, &mut memory_bus, 0x83, 0x38, 0x4B, FlagsRegister{ zero: false, substract: true, half_carry: true, carry: false });
+		test_daa(&mut my_cpu, &mut memory_bus, 0x45, FlagsRegister{ zero: false, substract: true, half_carry: false, carry: false });
 	}
 }
