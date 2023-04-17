@@ -4,7 +4,6 @@ use crate::memory_bus::video_ram::TilePixel;
 
 const TILE_WIDTH: usize = 0x08;
 const TILE_HEIGHT: usize = 0x08;
-const TILE_SIZE: usize	= TILE_WIDTH * TILE_HEIGHT;
 
 const TILESET_NB_TILES_WIDTH: usize		= 0x10;
 const TILESET_NB_TILES_HEIGHT: usize	= 0x08;
@@ -26,10 +25,9 @@ pub struct Ppu {
 impl Ppu {
 	pub fn new() -> Ppu {
 		let mut ppu = Ppu {
-			tileset_viewer: Window::new("Tileset", TILESET_VIEWER_PX_WIDTH, TILESET_VIEWER_PX_HEIGHT, WindowOptions::default()).unwrap(),
+			tileset_viewer: Window::new("Tileset", TILESET_VIEWER_PX_WIDTH, TILESET_VIEWER_PX_HEIGHT, WindowOptions {scale: minifb::Scale::X4,..WindowOptions::default()}).unwrap(),
 			tileset_window_buf: vec![0; TILESET_VIEWER_PX_SIZE]
 		};
-		ppu.tileset_viewer.limit_update_rate(Some(std::time::Duration::from_micros(16600)));
 		ppu
 	}
 	pub fn update(&mut self, memory_bus: &mut MemoryBus) {
@@ -53,7 +51,6 @@ impl Ppu {
 					TilePixel::Three => {0x00000000}
 				};
 			}
-			std::thread::sleep(std::time::Duration::from_millis(50));					// or first minifb update will fail??
 			self.tileset_viewer
 				.update_with_buffer(&self.tileset_window_buf, TILESET_VIEWER_PX_WIDTH, TILESET_VIEWER_PX_HEIGHT)
 				.unwrap();
@@ -71,15 +68,21 @@ mod tests {
 	fn test_ppu() {
 		let mut memory_bus = MemoryBus::new();
 		let mut ppu = Ppu::new();
+		std::thread::sleep(std::time::Duration::from_millis(50));					// or first minifb update will fail??
 		ppu.update(&mut memory_bus);
-		std::thread::sleep(std::time::Duration::from_millis(3000));
+		std::thread::sleep(std::time::Duration::from_millis(1000));
 		for i in 0..0x6000 {
 			let tiles_bank =	(i / TILE_WIDTH / TILE_HEIGHT / TILESET_NB_TILES_HEIGHT / TILESET_NB_TILES_WIDTH ) % NB_TILESETS;
 			let tile_index =	(i / TILE_WIDTH / TILE_HEIGHT) % (TILESET_NB_TILES_HEIGHT * TILESET_NB_TILES_WIDTH);
 			let tile_row =	(i / TILE_WIDTH) % TILE_HEIGHT ;
 			let tile_pixel =	 i % TILE_WIDTH;
-			memory_bus.video_ram.tiles[tiles_bank][tile_index][tile_row][tile_pixel] = TilePixel::Three;
-			if i % 128 == 0 {ppu.update(&mut memory_bus);}
+			memory_bus.video_ram.tiles[tiles_bank][tile_index][tile_row][tile_pixel] = match tiles_bank {
+				0 => TilePixel::One,
+				1 => TilePixel::Two,
+				2 => TilePixel::Three,
+				_ => TilePixel::Zero
+			};
+			ppu.update(&mut memory_bus);
 		}
 	}
 }
