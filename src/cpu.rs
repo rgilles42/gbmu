@@ -1,9 +1,9 @@
 pub mod registers;
 pub mod instructions;
-pub mod memory_bus;
+
 use std::fmt::Debug;
 use registers::Registers;
-use memory_bus::MemoryBus;
+use crate::memory_bus::MemoryBus;
 use instructions::Instruction;
 
 #[derive(Debug, Clone, Copy)]
@@ -12,9 +12,9 @@ pub enum CpuState{
 }
 
 //#[derive(Debug)]
-pub struct Cpu {
+pub struct Cpu<'a> {
 	registers: Registers,
-	pub memory_bus: MemoryBus,
+	pub memory_bus: &'a mut MemoryBus,
 	pub current_op: Option<Instruction>,
 	pub next_op: Option<Instruction>,
 	ime_scheduled: bool,
@@ -22,11 +22,11 @@ pub struct Cpu {
 	state: CpuState
 }
 
-impl Cpu {
-	pub fn new() -> Self {
-		let mut cpu = Cpu {
+impl Cpu<'_> {
+	pub fn new(memory_bus: &'_ mut MemoryBus) -> Cpu<'_> {
+		let cpu = Cpu {
 			registers: Registers::new(),
-    		memory_bus: MemoryBus::new(),
+    		memory_bus: memory_bus,
     		current_op: None,
 			next_op: Some(Instruction::NOP(1, 1)),				// Fake 'execute' of first tick which is just a 'fetch' 
 			ime_scheduled: false,
@@ -62,7 +62,7 @@ impl Cpu {
 	}
 }
 
-impl Debug for Cpu {
+impl Debug for Cpu<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Cpu").field("registers", &self.registers).field("current_op", &self.current_op).finish()
     }

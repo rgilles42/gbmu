@@ -1,6 +1,6 @@
 use minifb::{Key, Window, WindowOptions};
-use crate::cpu::memory_bus::MemoryBus;
-use crate::cpu::memory_bus::video_ram::TilePixel;
+use crate::memory_bus::MemoryBus;
+use crate::memory_bus::video_ram::TilePixel;
 
 const TILE_WIDTH: usize = 0x08;
 const TILE_HEIGHT: usize = 0x08;
@@ -19,13 +19,13 @@ const TILESET_VIEWER_PX_HEIGHT: usize	= TILESET_PX_HEIGHT * NB_TILESETS;
 const TILESET_VIEWER_PX_SIZE: usize		= TILESET_VIEWER_PX_WIDTH * TILESET_VIEWER_PX_HEIGHT;
 
 pub struct Ppu<'a> {
-	memory_bus: &'a mut MemoryBus,
+	memory_bus: &'a MemoryBus,
 	tileset_viewer: Window,
 	tileset_window_buf: Vec<u32>,
 }
 
 impl Ppu<'_> {
-	pub fn new(memory_bus: &'_ mut MemoryBus) -> Ppu<'_> {
+	pub fn new(memory_bus: &'_ MemoryBus) -> Ppu<'_> {
 		let mut ppu = Ppu {
 			memory_bus,
 			tileset_viewer: Window::new("Tileset", TILESET_VIEWER_PX_WIDTH, TILESET_VIEWER_PX_HEIGHT, WindowOptions::default()).unwrap(),

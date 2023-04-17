@@ -427,7 +427,7 @@ impl Instruction {
 	}
 }
 
-impl Cpu {
+impl Cpu<'_> {
 	pub fn get_reg_value(&mut self, reg: Regs) -> u8 {
 		match reg {
 			Regs::RegA => self.registers.a,
@@ -982,7 +982,9 @@ use super::{Instruction, Regs};
 	}
 	#[test]
 	fn test_arith() {
-		let mut my_cpu = Cpu::new();
+		let mut memory_bus = MemoryBus::new();
+		let mut my_cpu = Cpu::new(&mut memory_bus);
+		my_cpu.registers.program_counter = 0x100;				// avoid r/w on read-only bootrom area because it will make Byte(s)FromPC instructions unverifiable
 		test_adds(&mut my_cpu, 0x12, 0x24, 0x00.into());
 		test_adds(&mut my_cpu, 0x80, 0x00, FlagsRegister{ zero: true, substract: false, half_carry: false, carry: true });
 		test_adds(&mut my_cpu, 0xF1, 0xE2, FlagsRegister{ zero: false, substract: false, half_carry: false, carry: true });

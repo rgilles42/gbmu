@@ -1,4 +1,4 @@
-use super::memory_bus::MemoryBus;
+use crate::memory_bus::MemoryBus;
 use std::{fmt::Debug, ops::Sub};
 
 const FLAG_Z_BYTE_POS:	u8 = 7;
