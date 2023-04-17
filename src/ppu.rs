@@ -35,20 +35,51 @@ impl Ppu {
 	pub fn update(&mut self, memory_bus: &mut MemoryBus) {
 		if self.tileset_viewer.is_open() && !self.tileset_viewer.is_key_down(Key::Escape) {
 			for (i, pixel) in self.tileset_window_buf.iter_mut().enumerate() {
+				let mut i = i;
 				let tiles_bank =	 i / TILESET_PX_SIZE;
-				let tile_index =	(i - tiles_bank * TILESET_PX_SIZE) / TILE_SIZE;
-				let tile_row =	(i - tiles_bank * TILESET_PX_SIZE - tile_index * TILE_SIZE) / TILE_WIDTH;
-				let tile_pixel =	 i - tiles_bank * TILESET_PX_SIZE - tile_index * TILE_SIZE - tile_row * TILE_WIDTH;
+				i -= tiles_bank * TILESET_PX_SIZE;
+
+				let tile_y = i / (TILESET_PX_WIDTH * TILE_HEIGHT);
+				i -= tile_y * TILESET_PX_WIDTH * TILE_HEIGHT;
+				let tile_x = (i % TILESET_PX_WIDTH) / TILE_WIDTH;
+				let tile_index =	tile_y * TILESET_NB_TILES_WIDTH + tile_x;
+
+				let tile_row =	i / TILESET_PX_WIDTH;
+				let tile_pixel =	 i % TILE_WIDTH;
 				*pixel = match memory_bus.video_ram.tiles[tiles_bank][tile_index][tile_row][tile_pixel] {
 					TilePixel::Zero => {0x00FFFFFF}
 					TilePixel::One => {0x00A9A9A9}
 					TilePixel::Two => {0x00545454}
 					TilePixel::Three => {0x00000000}
-				}
+				};
 			}
+			std::thread::sleep(std::time::Duration::from_millis(50));					// or first minifb update will fail??
 			self.tileset_viewer
 				.update_with_buffer(&self.tileset_window_buf, TILESET_VIEWER_PX_WIDTH, TILESET_VIEWER_PX_HEIGHT)
 				.unwrap();
+		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::memory_bus::MemoryBus;
+
+    use super::*;
+
+	#[test]
+	fn test_ppu() {
+		let mut memory_bus = MemoryBus::new();
+		let mut ppu = Ppu::new();
+		ppu.update(&mut memory_bus);
+		std::thread::sleep(std::time::Duration::from_millis(3000));
+		for i in 0..0x6000 {
+			let tiles_bank =	(i / TILE_WIDTH / TILE_HEIGHT / TILESET_NB_TILES_HEIGHT / TILESET_NB_TILES_WIDTH ) % NB_TILESETS;
+			let tile_index =	(i / TILE_WIDTH / TILE_HEIGHT) % (TILESET_NB_TILES_HEIGHT * TILESET_NB_TILES_WIDTH);
+			let tile_row =	(i / TILE_WIDTH) % TILE_HEIGHT ;
+			let tile_pixel =	 i % TILE_WIDTH;
+			memory_bus.video_ram.tiles[tiles_bank][tile_index][tile_row][tile_pixel] = TilePixel::Three;
+			if i % 128 == 0 {ppu.update(&mut memory_bus);}
 		}
 	}
 }

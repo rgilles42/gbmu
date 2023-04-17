@@ -936,9 +936,9 @@ impl Cpu {
 
 #[cfg(test)]
 mod tests {
-	use crate::{*, cpu::{registers::FlagsRegister, instructions::RegPairs}};
+	use crate::{memory_bus::MemoryBus, cpu::{Cpu, {registers::FlagsRegister, instructions::RegPairs}}};
+	use super::{Instruction, Regs};
 
-use super::{Instruction, Regs};
 	fn test_adds(cpu: &mut Cpu, memory_bus: &mut MemoryBus, init_a_value: u8, expected_res: u8, expected_flag_reg: FlagsRegister) {
 		cpu.current_op = Some(Instruction::ADDAs(1, 4, Regs::RegA));
 		cpu.registers.a = init_a_value;
@@ -986,7 +986,6 @@ use super::{Instruction, Regs};
 	fn test_arith() {
 		let mut memory_bus = MemoryBus::new();
 		let mut my_cpu = Cpu::new();
-		my_cpu.registers.program_counter = 0x100;				// avoid r/w on read-only bootrom area because it will make Byte(s)FromPC instructions unverifiable
 		test_adds(&mut my_cpu, &mut memory_bus, 0x12, 0x24, 0x00.into());
 		test_adds(&mut my_cpu, &mut memory_bus, 0x80, 0x00, FlagsRegister{ zero: true, substract: false, half_carry: false, carry: true });
 		test_adds(&mut my_cpu, &mut memory_bus, 0xF1, 0xE2, FlagsRegister{ zero: false, substract: false, half_carry: false, carry: true });
