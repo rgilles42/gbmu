@@ -2,8 +2,9 @@ mod memory_bus;
 mod cpu;
 mod ppu;
 
-use crate::{cpu::Cpu, memory_bus::MemoryBus};
-use crate::ppu::Ppu;
+use cpu::Cpu;
+use memory_bus::MemoryBus;
+use ppu::Ppu;
 use std::{thread, time};
 
 fn main() {
