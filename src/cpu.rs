@@ -1,9 +1,9 @@
 pub mod registers;
 pub mod instructions;
 
-use std::{fmt::Debug, cell::RefMut};
+use std::fmt::Debug;
 use registers::Registers;
-use crate::memory_bus::{MemoryBus, self};
+use crate::memory_bus::MemoryBus;
 use instructions::Instruction;
 
 #[derive(Debug, Clone, Copy)]

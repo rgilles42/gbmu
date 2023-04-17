@@ -1,5 +1,3 @@
-use std::cell::RefMut;
-
 use minifb::{Key, Window, WindowOptions};
 use crate::memory_bus::MemoryBus;
 use crate::memory_bus::video_ram::TilePixel;

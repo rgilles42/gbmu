@@ -1,4 +1,4 @@
-use crate::memory_bus::{self, MemoryBus};
+use crate::memory_bus::MemoryBus;
 
 use super::{Cpu, CpuState};
 
