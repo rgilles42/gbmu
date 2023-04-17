@@ -1,3 +1,5 @@
+use std::cell::RefMut;
+
 use minifb::{Key, Window, WindowOptions};
 use crate::memory_bus::MemoryBus;
 use crate::memory_bus::video_ram::TilePixel;
@@ -19,13 +21,13 @@ const TILESET_VIEWER_PX_HEIGHT: usize	= TILESET_PX_HEIGHT * NB_TILESETS;
 const TILESET_VIEWER_PX_SIZE: usize		= TILESET_VIEWER_PX_WIDTH * TILESET_VIEWER_PX_HEIGHT;
 
 pub struct Ppu<'a> {
-	memory_bus: &'a MemoryBus,
+	memory_bus: RefMut<'a, MemoryBus>,
 	tileset_viewer: Window,
 	tileset_window_buf: Vec<u32>,
 }
 
 impl Ppu<'_> {
-	pub fn new(memory_bus: &'_ MemoryBus) -> Ppu<'_> {
+	pub fn new(memory_bus: RefMut<'_, MemoryBus>) -> Ppu<'_> {
 		let mut ppu = Ppu {
 			memory_bus,
 			tileset_viewer: Window::new("Tileset", TILESET_VIEWER_PX_WIDTH, TILESET_VIEWER_PX_HEIGHT, WindowOptions::default()).unwrap(),

@@ -982,8 +982,8 @@ use super::{Instruction, Regs};
 	}
 	#[test]
 	fn test_arith() {
-		let mut memory_bus = MemoryBus::new();
-		let mut my_cpu = Cpu::new(&mut memory_bus);
+		let memory_bus = RefCell::new(MemoryBus::new());
+		let mut my_cpu = Cpu::new(memory_bus.borrow_mut());
 		my_cpu.registers.program_counter = 0x100;				// avoid r/w on read-only bootrom area because it will make Byte(s)FromPC instructions unverifiable
 		test_adds(&mut my_cpu, 0x12, 0x24, 0x00.into());
 		test_adds(&mut my_cpu, 0x80, 0x00, FlagsRegister{ zero: true, substract: false, half_carry: false, carry: true });

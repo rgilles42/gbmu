@@ -5,12 +5,14 @@ mod ppu;
 use cpu::Cpu;
 use memory_bus::MemoryBus;
 use ppu::Ppu;
-use std::{thread, time};
+use std::{thread, time, cell::RefCell};
 
 fn main() {
-	let mut memory_bus = MemoryBus::new();
-	let mut my_cpu = Cpu::new(&mut memory_bus);
-	let mut _my_ppu = Ppu::new(my_cpu.memory_bus);
+	let memory_bus = RefCell::new(MemoryBus::new());
+	//memory_bus.borrow_mut().init();
+	memory_bus.borrow_mut().load_dmg_bootrom();
+	let mut my_cpu = Cpu::new(memory_bus.borrow_mut());
+	let mut _my_ppu = Ppu::new(memory_bus.borrow_mut());
 	my_cpu.tick();                                          // "Virtual" tick to realise first PC pointee byte fetch; no operation is executed
 	//my_ppu.update();
 	println!("CPU state {:x?}", my_cpu);

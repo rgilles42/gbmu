@@ -1,7 +1,7 @@
 pub mod registers;
 pub mod instructions;
 
-use std::fmt::Debug;
+use std::{fmt::Debug, cell::RefMut};
 use registers::Registers;
 use crate::memory_bus::MemoryBus;
 use instructions::Instruction;
@@ -14,7 +14,7 @@ pub enum CpuState{
 //#[derive(Debug)]
 pub struct Cpu<'a> {
 	registers: Registers,
-	pub memory_bus: &'a mut MemoryBus,
+	pub memory_bus: RefMut<'a, MemoryBus>,
 	pub current_op: Option<Instruction>,
 	pub next_op: Option<Instruction>,
 	ime_scheduled: bool,
@@ -23,10 +23,10 @@ pub struct Cpu<'a> {
 }
 
 impl Cpu<'_> {
-	pub fn new(memory_bus: &'_ mut MemoryBus) -> Cpu<'_> {
+	pub fn new(memory_bus: RefMut<'_, MemoryBus>) -> Cpu<'_> {
 		let cpu = Cpu {
 			registers: Registers::new(),
-    		memory_bus: memory_bus,
+    		memory_bus,
     		current_op: None,
 			next_op: Some(Instruction::NOP(1, 1)),				// Fake 'execute' of first tick which is just a 'fetch' 
 			ime_scheduled: false,
@@ -34,8 +34,6 @@ impl Cpu<'_> {
 			state: CpuState::Running
 		};
 		// cpu.registers.init();
-		// cpu.memory_bus.init();
-		cpu.memory_bus.load_dmg_bootrom();
 		cpu
 	}
 	pub fn tick(&mut self) {
