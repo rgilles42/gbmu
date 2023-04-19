@@ -17,20 +17,36 @@ const TILESET_VIEWER_PX_WIDTH: usize	= TILESET_PX_WIDTH;
 const TILESET_VIEWER_PX_HEIGHT: usize	= TILESET_PX_HEIGHT * NB_TILESETS;
 const TILESET_VIEWER_PX_SIZE: usize		= TILESET_VIEWER_PX_WIDTH * TILESET_VIEWER_PX_HEIGHT;
 
+const TILEMAP_NB_TILES_WIDTH: usize		= 0x20;
+const TILEMAP_NB_TILES_HEIGHT: usize	= 0x20;
+
+const TILEMAP_PX_WIDTH: usize	= TILE_WIDTH * TILEMAP_NB_TILES_WIDTH;
+const TILEMAP_PX_HEIGHT: usize	= TILE_HEIGHT * TILEMAP_NB_TILES_HEIGHT;
+const TILEMAP_PX_SIZE: usize	= TILEMAP_PX_WIDTH * TILEMAP_PX_HEIGHT;
+
+const NB_TILEMAPS: usize = 1;
+const TILEMAP_VIEWER_PX_WIDTH: usize	= TILEMAP_PX_WIDTH;
+const TILEMAP_VIEWER_PX_HEIGHT: usize	= TILEMAP_PX_HEIGHT * NB_TILEMAPS;
+const TILEMAP_VIEWER_PX_SIZE: usize		= TILEMAP_VIEWER_PX_WIDTH * TILEMAP_VIEWER_PX_HEIGHT;
+
 pub struct Ppu {
 	tileset_viewer: Window,
 	tileset_window_buf: Vec<u32>,
+	tilemap_viewer: Window,
+	tilemap_window_buf: Vec<u32>,
 }
 
 impl Ppu {
 	pub fn new() -> Ppu {
 		let ppu = Ppu {
 			tileset_viewer: Window::new("Tileset", TILESET_VIEWER_PX_WIDTH, TILESET_VIEWER_PX_HEIGHT, WindowOptions {scale: minifb::Scale::X4,..WindowOptions::default()}).unwrap(),
-			tileset_window_buf: vec![0; TILESET_VIEWER_PX_SIZE]
+			tileset_window_buf: vec![0; TILESET_VIEWER_PX_SIZE],
+			tilemap_viewer: Window::new("Tilemap", TILEMAP_VIEWER_PX_WIDTH, TILEMAP_VIEWER_PX_HEIGHT, WindowOptions::default()).unwrap(),
+			tilemap_window_buf: vec![0; TILEMAP_VIEWER_PX_SIZE],
 		};
 		ppu
 	}
-	pub fn update(&mut self, memory_bus: &mut MemoryBus) {
+	fn update_tileset_win_buf(&mut self, memory_bus: &mut MemoryBus) {
 		if self.tileset_viewer.is_open() && !self.tileset_viewer.is_key_down(Key::Escape) {
 			for (id_bank, bank) in memory_bus.video_ram.tiles.iter().enumerate() {
 				for (id_tile, tile) in bank.iter().enumerate() {
@@ -61,6 +77,36 @@ impl Ppu {
 				.unwrap();
 		}
 	}
+	fn update_tilemap_win_buf(&mut self, memory_bus: &mut MemoryBus) {
+		for y in 0..TILEMAP_NB_TILES_HEIGHT {
+			for x in 0..TILEMAP_NB_TILES_WIDTH {
+				let tile_index = memory_bus.video_ram.get_bg_tile_index(x as u8, y as u8);
+				let tile = memory_bus.video_ram.get_bg_tile(tile_index);
+				for (row_index, row) in tile.iter().enumerate() {
+					for (pixel_index, pixel) in row.iter().enumerate() {
+						self.tilemap_window_buf[
+							y * TILEMAP_PX_WIDTH * TILE_HEIGHT +
+							row_index * TILEMAP_PX_WIDTH +
+							x * TILE_WIDTH +
+							pixel_index
+						] = match pixel {
+							TilePixel::Zero => {0x00FFFFFF},
+							TilePixel::One => {0x00A9A9A9},
+							TilePixel::Two => {0x00545454},
+							TilePixel::Three => {0x00000000},
+						}
+					}
+				}
+			}
+		}
+		self.tilemap_viewer
+			.update_with_buffer(&self.tilemap_window_buf, TILEMAP_VIEWER_PX_WIDTH, TILEMAP_VIEWER_PX_HEIGHT)
+			.unwrap();
+	}
+	pub fn update(&mut self, memory_bus: &mut MemoryBus) {
+		self.update_tileset_win_buf(memory_bus);
+		self.update_tilemap_win_buf(memory_bus);
+	}
 }
 
 #[cfg(test)]
@@ -70,7 +116,7 @@ mod tests {
     use super::*;
 
 	#[test]
-	fn test_ppu() {
+	fn test_tileset_fill() {
 		let mut memory_bus = MemoryBus::new();
 		let mut ppu = Ppu::new();
 		std::thread::sleep(std::time::Duration::from_millis(500));					// or first minifb update will fail??
@@ -91,7 +137,7 @@ mod tests {
 		}
 	}
 	#[test]
-	fn test_ppu2() {
+	fn test_tileset_direct() {
 		let mut memory_bus = MemoryBus::new();
 		let mut ppu = Ppu::new();
 		memory_bus.video_ram.tiles[0][0x19][0] = [TilePixel::Zero, TilePixel::Zero, TilePixel::One, TilePixel::One, TilePixel::One, TilePixel::One, TilePixel::Zero, TilePixel::Zero];
@@ -103,11 +149,11 @@ mod tests {
 		memory_bus.video_ram.tiles[0][0x19][6] = [TilePixel::Zero, TilePixel::One, TilePixel::Zero, TilePixel::Zero, TilePixel::Zero, TilePixel::Zero, TilePixel::One, TilePixel::Zero];
 		memory_bus.video_ram.tiles[0][0x19][7] = [TilePixel::Zero, TilePixel::Zero, TilePixel::One, TilePixel::One, TilePixel::One, TilePixel::One, TilePixel::Zero, TilePixel::Zero];
 		loop {
-			ppu.update(&mut memory_bus);
+			ppu.update(&mut memory_bus);						// Should display an ® logo in tile {1; 9}
 		}
 	}
 	#[test]
-	fn test_ppu3() {
+	fn test_tileset_generation() {
 		let mut memory_bus = MemoryBus::new();
 		let mut ppu = Ppu::new();
 		memory_bus.video_ram.write(0x190, 0x3c);
@@ -119,7 +165,7 @@ mod tests {
 		memory_bus.video_ram.write(0x19c, 0x42);
 		memory_bus.video_ram.write(0x19e, 0x3c);
 		loop {
-			ppu.update(&mut memory_bus);
+			ppu.update(&mut memory_bus);						// Should display an ® logo in tile {1; 9}
 		}
 	}
 }

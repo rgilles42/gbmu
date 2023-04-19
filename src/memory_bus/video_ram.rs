@@ -7,12 +7,24 @@ pub enum TilePixel {
 }
 pub type TileRow = [TilePixel; 8];
 pub type Tile = [TileRow; 8];
+#[derive(Debug, Copy, Clone)]
+pub enum PixelColour {
+    White,
+    LightGray,
+    DarkGray,
+    Black,
+}
 pub struct VideoRam {
 	pub is_locked: bool,
 	video_ram: [u8; 0x2000],
+	lcdc_ram: u8,
+	bgp_ram: u8,
 	pub tiles: [[Tile; 0x80]; 3],			// 0x8000 - 0x97FF
 	pub bg_tilemap0: [[u8; 0x20]; 0x20],	// 0x9800 - 0x9BFF
 	pub bg_tilemap1: [[u8; 0x20]; 0x20],	// 0x9C00 - 0x9FFF
+	pub using_fully_common_bg_tileset: bool,	// 0xFF40 & (1 << 4)
+	pub using_secondary_tilemap: bool,		// 0xFF40 & (1 << 5)
+	pub background_palette: [PixelColour; 4]// 0xFF47
 }
 
 impl VideoRam {
@@ -20,9 +32,14 @@ impl VideoRam {
 		VideoRam {
 			is_locked: false,
 			video_ram: [0; 0x2000],
+			lcdc_ram: 0,
+			bgp_ram: 0,
 			tiles: [ [[[TilePixel::Zero;8];8];0x80]; 3],
 			bg_tilemap0: [[0; 0x20]; 0x20],
 			bg_tilemap1: [[0; 0x20]; 0x20],
+			using_fully_common_bg_tileset: true,
+			using_secondary_tilemap: false,
+			background_palette: [PixelColour::White, PixelColour::LightGray, PixelColour::DarkGray, PixelColour::Black]
 		}
 	}
 	fn write_tile(&mut self, floored_even_addr: usize) {
@@ -58,19 +75,19 @@ impl VideoRam {
 	pub fn read(&self, address: usize) -> u8 {
 		self.video_ram[address]
 	}
-	pub fn get_bg_tile_index(&self, x: u8, y: u8, from_secondary_tilemap: bool) -> u8{
-		if from_secondary_tilemap {
+	pub fn get_bg_tile_index(&self, x: u8, y: u8) -> u8{
+		if self.using_secondary_tilemap {
 			self.bg_tilemap1[x as usize][y as usize]
 		} else {
 			self.bg_tilemap0[x as usize][y as usize]
 		}
 		
 	}
-	pub fn get_bg_tile(&self, mut tile_index: u8, using_8800_addressing: bool) -> Tile {
+	pub fn get_bg_tile(&self, mut tile_index: u8) -> Tile {
 		let tile_reg = if tile_index >= 128 {
 			tile_index -= 128;
 			1
-		} else { if using_8800_addressing {2} else {0} };
+		} else { if self.using_fully_common_bg_tileset {0} else {2} };
 		self.tiles[tile_reg][tile_index as usize]
 	}
 	pub fn get_obj_tile(&self, mut tile_index: u8) -> Tile {
