@@ -27,11 +27,11 @@ impl VideoRam {
 	}
 	fn write_tile(&mut self, floored_even_addr: usize) {
 		let tile_reg = floored_even_addr / 0x800;
-		let tile_index = (floored_even_addr - tile_reg * 0x800) / 16;
+		let tile_index = (floored_even_addr % 0x800) / 16;
 		let row_index = (floored_even_addr % 16) / 2;
 		for pixel_index in 0..8{
-			let msb = self.video_ram[floored_even_addr + 1] & (7 - pixel_index);
-			let lsb = self.video_ram[floored_even_addr] & (7 - pixel_index);
+			let msb = self.video_ram[floored_even_addr + 1] & (1 << (7 - pixel_index));
+			let lsb = self.video_ram[floored_even_addr] & (1 << (7 - pixel_index));
 			let value = match (msb != 0, lsb != 0) {
 				(false, false) => TilePixel::Zero,
 				(false, true) => TilePixel::One,
