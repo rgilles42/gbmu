@@ -7,7 +7,7 @@ pub enum TilePixel {
 }
 pub type TileRow = [TilePixel; 8];
 pub type Tile = [TileRow; 8];
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum PixelColour {
     White,
     LightGray,
@@ -17,12 +17,12 @@ pub enum PixelColour {
 pub struct VideoRam {
 	pub is_locked: bool,
 	video_ram: [u8; 0x2000],
-	lcdc_ram: u8,
-	bgp_ram: u8,
+	lcdc_ram: u8,							// 0xFF40
+	bgp_ram: u8,							// 0xFF47
 	pub tiles: [[Tile; 0x80]; 3],			// 0x8000 - 0x97FF
 	pub bg_tilemap0: [[u8; 0x20]; 0x20],	// 0x9800 - 0x9BFF
 	pub bg_tilemap1: [[u8; 0x20]; 0x20],	// 0x9C00 - 0x9FFF
-	pub using_fully_common_bg_tileset: bool,	// 0xFF40 & (1 << 4)
+	pub using_fully_common_bg_tileset: bool,// 0xFF40 & (1 << 4)
 	pub using_secondary_tilemap: bool,		// 0xFF40 & (1 << 5)
 	pub background_palette: [PixelColour; 4]// 0xFF47
 }
@@ -59,27 +59,53 @@ impl VideoRam {
 		}
 	}
 	pub fn write(&mut self, address: usize, data: u8) {
-		if self.is_locked {return}
-		self.video_ram[address] = data;
-		if address < 0x1800 {
-			self.write_tile(address & 0xFFFE)
+		if address < 0x2000 {
+			if self.is_locked {return}
+			self.video_ram[address] = data;
+			if address < 0x1800 {
+				self.write_tile(address & 0xFFFE)
+			}
+			else {
+				if address < 0x1C00 {
+					self.bg_tilemap0[(address - 0x1800) / 0x20][(address - 0x1800) % 0x20] = data
+				} else {
+					self.bg_tilemap1[(address - 0x1C00) / 0x20][(address - 0x1C00) % 0x20] = data
+				}
+			}
+		} else if address == 0xFF40 {
+			self.lcdc_ram = data;
+			self.using_fully_common_bg_tileset	= data & (1 << 4) != 0;
+			self.using_secondary_tilemap		= data & (1 << 5) != 0;
 		}
-		else {
-			if address < 0x1C00 {
-				self.bg_tilemap0[(address - 0x1800) / 0x20][(address - 0x1800) % 0x20] = data
-			} else {
-				self.bg_tilemap1[(address - 0x1C00) / 0x20][(address - 0x1C00) % 0x20] = data
+		else {										// 0xFF47
+			self.bgp_ram = data;
+			for i in 0..4 {
+				let colour_code = (data >> 2*i) & 0x03;
+				self.background_palette[i] = match colour_code {
+					0 => PixelColour::White,
+					1 => PixelColour::LightGray,
+					2 => PixelColour::DarkGray,
+					_ => PixelColour::Black
+				}
 			}
 		}
 	}
 	pub fn read(&self, address: usize) -> u8 {
-		self.video_ram[address]
+		if address < 0x2000 {
+			self.video_ram[address]
+		}
+		else if address == 0xFF40 {
+			self.lcdc_ram
+		}
+		else {							// 0xFF47
+			self.bgp_ram
+		}
 	}
 	pub fn get_bg_tile_index(&self, x: u8, y: u8) -> u8{
 		if self.using_secondary_tilemap {
-			self.bg_tilemap1[x as usize][y as usize]
+			self.bg_tilemap1[y as usize][x as usize]
 		} else {
-			self.bg_tilemap0[x as usize][y as usize]
+			self.bg_tilemap0[y as usize][x as usize]
 		}
 		
 	}
