@@ -114,6 +114,8 @@ impl MemoryBus {
 			0xFE00..=0xFE9F	=>		self.sprite_oam[(address - 0xFE00) as usize],
 			0xFEA0..=0xFEFF	=> 0,
 			0xFF40 | 0xFF47 =>		self.video_ram.read(address as usize),
+			0xFF42			=>		self.video_ram.scy_ram,
+			0xFF43			=>		self.video_ram.scx_ram,
 			0xFF00..=0xFF7F	=>		  self.io_regis[(address - 0xFF00) as usize],
 			0xFF80..=0xFFFE	=> self.high_intern_ram[(address - 0xFF80) as usize],
 			0xFFFF			=> self.interrupt_enable
@@ -131,7 +133,9 @@ impl MemoryBus {
 			0xE000..=0xFDFF	=>		{self.intern_ram[(address - 0xE000) as usize] = data},
 			0xFE00..=0xFE9F	=>		{self.sprite_oam[(address - 0xFE00) as usize] = data},
 			0xFEA0..=0xFEFF	=> {},
-			0xFF40 | 0xFF47 =>		self.video_ram.write(address as usize, data),
+			0xFF40 | 0xFF47 =>		  self.video_ram.write(address as usize, data),
+			0xFF42			=>		 {self.video_ram.scy_ram = data},
+			0xFF43			=>		 {self.video_ram.scx_ram = data},
 			0xFF00..=0xFF7F	=>		  {self.io_regis[(address - 0xFF00) as usize] = data},
 			0xFF80..=0xFFFE	=> {self.high_intern_ram[(address - 0xFF80) as usize] = data},
 			0xFFFF			=> {self.interrupt_enable = data}

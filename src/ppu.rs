@@ -31,48 +31,54 @@ const TILEMAP_VIEWER_PX_WIDTH: usize	= TILEMAP_PX_WIDTH;
 const TILEMAP_VIEWER_PX_HEIGHT: usize	= TILEMAP_PX_HEIGHT * NB_TILEMAPS;
 const TILEMAP_VIEWER_PX_SIZE: usize		= TILEMAP_VIEWER_PX_WIDTH * TILEMAP_VIEWER_PX_HEIGHT;
 
+const VIEWPORT_PX_WIDTH: usize	= 160;
+const VIEWPORT_PX_HEIGHT: usize	= 144;
+const VIEWPORT_PX_SIZE: usize	= 23040;
+
 pub struct Ppu {
+	palette_translation: HashMap<PixelColour, u32>,
 	tileset_viewer: Window,
 	tileset_window_buf: Vec<u32>,
 	tilemap_viewer: Window,
-	tilemap_window_buf: Vec<u32>,
-	palette_translation: HashMap<PixelColour, u32>
+	tilemap_buf: Vec<u32>,
+	viewport: Window,
+	viewport_buffer: Vec<u32>
 }
 
 impl Ppu {
 	pub fn new() -> Ppu {
 		let ppu = Ppu {
+			palette_translation: HashMap::from([(PixelColour::White, 0x00FFFFFF), (PixelColour::LightGray, 0x00A9A9A9), (PixelColour::DarkGray, 0x00545454), (PixelColour::Black, 0x00000000)]),
 			tileset_viewer: Window::new("Tileset", TILESET_VIEWER_PX_WIDTH, TILESET_VIEWER_PX_HEIGHT, WindowOptions {scale: minifb::Scale::X4,..WindowOptions::default()}).unwrap(),
 			tileset_window_buf: vec![0; TILESET_VIEWER_PX_SIZE],
 			tilemap_viewer: Window::new("Tilemap", TILEMAP_VIEWER_PX_WIDTH, TILEMAP_VIEWER_PX_HEIGHT, WindowOptions {scale: minifb::Scale::X4,..WindowOptions::default()}).unwrap(),
-			tilemap_window_buf: vec![0; TILEMAP_VIEWER_PX_SIZE],
-			palette_translation: HashMap::from([(PixelColour::White, 0x00FFFFFF), (PixelColour::LightGray, 0x00A9A9A9), (PixelColour::DarkGray, 0x00545454), (PixelColour::Black, 0x00000000)])
+			tilemap_buf: vec![0; TILEMAP_VIEWER_PX_SIZE],
+			viewport: Window::new("GBMU", VIEWPORT_PX_WIDTH, VIEWPORT_PX_HEIGHT, WindowOptions {scale: minifb::Scale::X4,..WindowOptions::default()}).unwrap(),
+			viewport_buffer: vec![0; VIEWPORT_PX_SIZE]
 		};
 		ppu
 	}
 	fn update_tileset_win_buf(&mut self, memory_bus: &mut MemoryBus) {
-		if self.tileset_viewer.is_open() && !self.tileset_viewer.is_key_down(Key::Escape) {
-			for (id_bank, bank) in memory_bus.video_ram.tiles.iter().enumerate() {
-				for (id_tile, tile) in bank.iter().enumerate() {
-					for (id_row, row) in tile.iter().enumerate() {
-						for (pixel_id, pixel) in row.iter().enumerate() {
-							self.tileset_window_buf[
-								id_bank * TILESET_PX_SIZE +
-								(id_tile / TILESET_NB_TILES_WIDTH) * (TILESET_PX_WIDTH * TILE_HEIGHT) +
-								id_row * TILESET_PX_WIDTH +
-								(id_tile % TILESET_NB_TILES_WIDTH) * TILE_WIDTH +
-								pixel_id
-							] =
-							if id_row == 0 || pixel_id == 0 {0x000000FF}
-							else {
-									match pixel {
-										TilePixel::Zero => 0x00FFFFFF,
-										TilePixel::One => 0x00A9A9A9,
-										TilePixel::Two => 0x00545454,
-										TilePixel::Three => 0x00000000,
-									}
-							};
-						}
+		for (id_bank, bank) in memory_bus.video_ram.tiles.iter().enumerate() {
+			for (id_tile, tile) in bank.iter().enumerate() {
+				for (id_row, row) in tile.iter().enumerate() {
+					for (pixel_id, pixel) in row.iter().enumerate() {
+						self.tileset_window_buf[
+							id_bank * TILESET_PX_SIZE +
+							(id_tile / TILESET_NB_TILES_WIDTH) * (TILESET_PX_WIDTH * TILE_HEIGHT) +
+							id_row * TILESET_PX_WIDTH +
+							(id_tile % TILESET_NB_TILES_WIDTH) * TILE_WIDTH +
+							pixel_id
+						] =
+						if id_row == 0 || pixel_id == 0 {0x000000FF}
+						else {
+								match pixel {
+									TilePixel::Zero => 0x00FFFFFF,
+									TilePixel::One => 0x00A9A9A9,
+									TilePixel::Two => 0x00545454,
+									TilePixel::Three => 0x00000000,
+								}
+						};
 					}
 				}
 			}
@@ -81,19 +87,19 @@ impl Ppu {
 				.unwrap();
 		}
 	}
-	fn update_tilemap_win_buf(&mut self, memory_bus: &mut MemoryBus) {
+	fn update_tilemap_buf(&mut self, memory_bus: &mut MemoryBus) {
 		for y in 0..TILEMAP_NB_TILES_HEIGHT {
 			for x in 0..TILEMAP_NB_TILES_WIDTH {
 				let tile_index = memory_bus.video_ram.get_bg_tile_index(x as u8, y as u8);
 				let tile = memory_bus.video_ram.get_bg_tile(tile_index);
 				for (row_index, row) in tile.iter().enumerate() {
 					for (pixel_index, pixel) in row.iter().enumerate() {
-						self.tilemap_window_buf[
+						self.tilemap_buf[
 							y * TILEMAP_PX_WIDTH * TILE_HEIGHT +
 							row_index * TILEMAP_PX_WIDTH +
 							x * TILE_WIDTH +
 							pixel_index
-						] = match pixel {
+						] =	match pixel {
 							TilePixel::Zero => self.palette_translation[&memory_bus.video_ram.background_palette[0]],
 							TilePixel::One => self.palette_translation[&memory_bus.video_ram.background_palette[1]],
 							TilePixel::Two => self.palette_translation[&memory_bus.video_ram.background_palette[2]],
@@ -103,13 +109,41 @@ impl Ppu {
 				}
 			}
 		}
-		self.tilemap_viewer
-			.update_with_buffer(&self.tilemap_window_buf, TILEMAP_VIEWER_PX_WIDTH, TILEMAP_VIEWER_PX_HEIGHT)
-			.unwrap();
+		for y in 0..VIEWPORT_PX_HEIGHT {
+			for x in 0..VIEWPORT_PX_WIDTH {
+				self.viewport_buffer[y * VIEWPORT_PX_WIDTH + x] = self.tilemap_buf[
+					((memory_bus.video_ram.scy_ram as usize + y) % TILEMAP_PX_HEIGHT) * TILEMAP_PX_WIDTH +
+					(memory_bus.video_ram.scx_ram as usize + x) % TILEMAP_PX_WIDTH
+				]
+			}
+		}
+		if self.tilemap_viewer.is_open() && !self.tilemap_viewer.is_key_down(Key::Escape) {
+			for x in 0..VIEWPORT_PX_WIDTH {
+				self.tilemap_buf[memory_bus.video_ram.scy_ram as usize * TILEMAP_PX_WIDTH + (memory_bus.video_ram.scx_ram as usize + x) % TILEMAP_PX_WIDTH] = 0x00FF0000;
+				self.tilemap_buf[((memory_bus.video_ram.scy_ram as usize + VIEWPORT_PX_HEIGHT - 1) % TILEMAP_PX_HEIGHT) * TILEMAP_PX_WIDTH + (memory_bus.video_ram.scx_ram as usize + x) % TILEMAP_PX_WIDTH] = 0x00FF0000;
+			}
+			for y in 0..VIEWPORT_PX_HEIGHT {
+				self.tilemap_buf[((memory_bus.video_ram.scy_ram as usize + y) % TILEMAP_PX_HEIGHT) * TILEMAP_PX_WIDTH + memory_bus.video_ram.scx_ram as usize] = 0x00FF0000;
+				self.tilemap_buf[((memory_bus.video_ram.scy_ram as usize + y) % TILEMAP_PX_HEIGHT) * TILEMAP_PX_WIDTH + (memory_bus.video_ram.scx_ram as usize + VIEWPORT_PX_WIDTH) % TILEMAP_PX_WIDTH - 1] = 0x00FF0000;
+			}
+			self.tilemap_viewer
+				.update_with_buffer(&self.tilemap_buf, TILEMAP_VIEWER_PX_WIDTH, TILEMAP_VIEWER_PX_HEIGHT)
+				.unwrap();
+		}
+	}
+	fn update_viewport_buf(&mut self, memory_bus: &mut MemoryBus) {
+		if self.viewport.is_open() && !self.viewport.is_key_down(Key::Escape) {
+			self.viewport
+				.update_with_buffer(&self.viewport_buffer, VIEWPORT_PX_WIDTH, VIEWPORT_PX_HEIGHT)
+				.unwrap();
+		}
 	}
 	pub fn update(&mut self, memory_bus: &mut MemoryBus) {
-		self.update_tileset_win_buf(memory_bus);
-		self.update_tilemap_win_buf(memory_bus);
+		if self.tileset_viewer.is_open() && !self.tileset_viewer.is_key_down(Key::Escape) {
+			self.update_tileset_win_buf(memory_bus);
+		}
+		self.update_tilemap_buf(memory_bus);
+		self.update_viewport_buf(memory_bus);
 	}
 }
 
@@ -219,6 +253,8 @@ mod tests {
 		];
 		loop {
 			ppu.update(&mut memory_bus);
+			memory_bus.write_byte(0xFF42, memory_bus.read_byte(0xFF42).overflowing_add(1).0);
+			memory_bus.write_byte(0xFF43, memory_bus.read_byte(0xFF43).overflowing_add(1).0);
 		}
 	}
 }

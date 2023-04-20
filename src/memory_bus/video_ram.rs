@@ -18,6 +18,8 @@ pub struct VideoRam {
 	pub is_locked: bool,
 	video_ram: [u8; 0x2000],
 	lcdc_ram: u8,							// 0xFF40
+	pub scy_ram: u8,						// 0xFF42
+	pub scx_ram: u8,						// 0xFF43
 	bgp_ram: u8,							// 0xFF47
 	pub tiles: [[Tile; 0x80]; 3],			// 0x8000 - 0x97FF
 	pub bg_tilemap0: [[u8; 0x20]; 0x20],	// 0x9800 - 0x9BFF
@@ -34,6 +36,8 @@ impl VideoRam {
 			video_ram: [0; 0x2000],
 			lcdc_ram: 0,
 			bgp_ram: 0,
+			scx_ram: 0,
+			scy_ram: 0,
 			tiles: [ [[[TilePixel::Zero;8];8];0x80]; 3],
 			bg_tilemap0: [[0; 0x20]; 0x20],
 			bg_tilemap1: [[0; 0x20]; 0x20],
