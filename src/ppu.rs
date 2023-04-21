@@ -29,6 +29,7 @@ const VIEWPORT_PX_SIZE: usize	= VIEWPORT_PX_WIDTH * VIEWPORT_PX_HEIGHT;
 
 pub struct Ppu {
 	palette_translation: HashMap<PixelColour, u32>,
+
 	tileset_viewer: Window,
 	tileset_window_buf: Vec<u32>,
 	tilemap_viewer: Window,

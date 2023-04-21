@@ -11,7 +11,7 @@ pub struct MemoryBus {
 	pub cartr_ram: [u8; 0x2000],		// 0xA000 - 0xBFFF
 	pub intern_ram: [u8; 0x2000],		// 0xC000 - 0xDFFF
 /* echo of intern_ram: [u8; 0x1E00] */	// 0xE000 - 0xFDFF
-	pub oam: [u8; 0x00A0],				// 0xFE00 - 0xFE9F
+//	oam: [u8; 0x00A0],					// 0xFE00 - 0xFE9F => Inside VideoRam
 /* unmapped memory: [u8; 0x0060] */		// 0xFEA0 - 0xFEFF
 	pub io_regis: [u8; 0x0080],			// 0xFF00 - 0xFF7F
 	pub high_intern_ram: [u8; 0x007F],	// 0xFF80 - 0xFFFE
@@ -28,7 +28,6 @@ impl MemoryBus {
 			video_ram: VideoRam::new(),
 			cartr_ram: [0; 0x2000],
 			intern_ram: [0; 0x2000],
-			oam: [0; 0x00A0],
 			io_regis: [0; 0x0080],
 			high_intern_ram: [0; 0x007F],
 			interrupt_enable: 0
@@ -107,11 +106,11 @@ impl MemoryBus {
 							   else {self.rom_bank0[(address - 0x0000) as usize]},
 			0x0100..=0x3FFF	=>		 self.rom_bank0[(address - 0x0000) as usize],
 			0x4000..=0x7FFF	=>		 self.rom_bank1[(address - 0x4000) as usize],
-			0x8000..=0x9FFF	=>		 self.video_ram.read((address - 0x8000) as usize),
+			0x8000..=0x9FFF	=>		 self.video_ram.read(address as usize),
 			0xA000..=0xBFFF	=>		 self.cartr_ram[(address - 0xA000) as usize],
 			0xC000..=0xDFFF	=>		self.intern_ram[(address - 0xC000) as usize],
 			0xE000..=0xFDFF	=>		self.intern_ram[(address - 0xE000) as usize],
-			0xFE00..=0xFE9F	=>		self.oam[(address - 0xFE00) as usize],
+			0xFE00..=0xFE9F	=>		self.video_ram.read(address as usize),
 			0xFEA0..=0xFEFF	=> 0,
 			0xFF40 | 0xFF47 =>		self.video_ram.read(address as usize),
 			0xFF42			=>		self.video_ram.scy_ram,
@@ -128,11 +127,11 @@ impl MemoryBus {
 							   else  {self.rom_bank0[(address - 0x0000) as usize] = data},
 			0x0000..=0x3FFF	=>		 {self.rom_bank0[(address - 0x0000) as usize] = data},
 			0x4000..=0x7FFF	=>		 {self.rom_bank1[(address - 0x4000) as usize] = data},
-			0x8000..=0x9FFF	=>		 {self.video_ram.write((address - 0x8000) as usize, data)},
+			0x8000..=0x9FFF	=>		  self.video_ram.write(address as usize, data),
 			0xA000..=0xBFFF	=>		 {self.cartr_ram[(address - 0xA000) as usize] = data},
 			0xC000..=0xDFFF	=>		{self.intern_ram[(address - 0xC000) as usize] = data},
 			0xE000..=0xFDFF	=>		{self.intern_ram[(address - 0xE000) as usize] = data},
-			0xFE00..=0xFE9F	=>		{self.oam[(address - 0xFE00) as usize] = data},
+			0xFE00..=0xFE9F	=>		  self.video_ram.write(address as usize, data),
 			0xFEA0..=0xFEFF	=> {},
 			0xFF40 | 0xFF47 =>		  self.video_ram.write(address as usize, data),
 			0xFF42			=>		 {self.video_ram.scy_ram = data},

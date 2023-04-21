@@ -15,9 +15,11 @@ pub enum PixelColour {
     Black,
 }
 pub struct VideoRam {
-	pub is_locked: bool,
+	pub is_vram_locked: bool,
+	pub is_oam_locked: bool,
 
 	video_ram: [u8; 0x2000],
+	oam: [u8; 0x00A0],
 	lcdc_ram: u8,							// 0xFF40
 	pub scy_ram: u8,						// 0xFF42
 	pub scx_ram: u8,						// 0xFF43
@@ -41,8 +43,10 @@ pub struct VideoRam {
 impl VideoRam {
 	pub fn new() -> Self {
 		VideoRam {
-			is_locked: false,
+			is_vram_locked: false,
+			is_oam_locked: false,
 			video_ram: [0; 0x2000],
+			oam: [0; 0xA0],
 			lcdc_ram: 0,
 			bgp_ram: 0,
 			scx_ram: 0,
@@ -79,8 +83,9 @@ impl VideoRam {
 		}
 	}
 	pub fn write(&mut self, address: usize, data: u8) {
-		if address < 0x2000 {
-			if self.is_locked {return}
+		if address < 0xA000 {
+			if self.is_vram_locked {return}
+			let address = address - 0x8000;
 			self.video_ram[address] = data;
 			if address < 0x1800 {
 				self.write_tile(address & 0xFFFE)
@@ -92,6 +97,12 @@ impl VideoRam {
 					self.bg_tilemap1[(address - 0x1C00) / 0x20][(address - 0x1C00) % 0x20] = data
 				}
 			}
+		} else if address < 0xFEA0 {
+			if self.is_oam_locked {return}
+			let address = address - 0xFE00;
+			self.oam[address] = data;
+			// OAM formatting
+
 		} else if address == 0xFF40 {
 			self.lcdc_ram = data;
 			self.lcd_enable						= (data & (1 << 7)) != 0;
@@ -117,13 +128,23 @@ impl VideoRam {
 		}
 	}
 	pub fn read(&self, address: usize) -> u8 {
-		if address < 0x2000 {
-			self.video_ram[address]
-		}
-		else if address == 0xFF40 {
+		if address < 0xA000 {
+			if self.is_vram_locked {
+				0xFF
+			} else {
+				let address = address - 0x8000;
+				self.video_ram[address]
+			}
+		} else if address < 0xFEA0 {
+			if self.is_oam_locked {
+				0xFF
+			} else {
+				let address = address - 0xFE00;
+				self.oam[address]
+			}
+		} else if address == 0xFF40 {
 			self.lcdc_ram
-		}
-		else {							// 0xFF47
+		} else {							// 0xFF47
 			self.bgp_ram
 		}
 	}
