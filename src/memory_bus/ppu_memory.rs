@@ -14,7 +14,7 @@ pub enum PixelColour {
     DarkGray,
     Black,
 }
-pub struct VideoRam {
+pub struct PPUMemory {
 	pub is_vram_locked: bool,
 	pub is_oam_locked: bool,
 
@@ -40,9 +40,9 @@ pub struct VideoRam {
 	pub background_palette: [PixelColour; 4]// 0xFF47
 }
 
-impl VideoRam {
+impl PPUMemory {
 	pub fn new() -> Self {
-		VideoRam {
+		PPUMemory {
 			is_vram_locked: false,
 			is_oam_locked: false,
 			video_ram: [0; 0x2000],

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use minifb::{Key, Window, WindowOptions};
 use crate::memory_bus::MemoryBus;
-use crate::memory_bus::video_ram::{TilePixel, PixelColour};
+use crate::memory_bus::ppu_memory::{TilePixel, PixelColour};
 
 const TILE_WIDTH: usize = 0x08;
 const TILE_HEIGHT: usize = 0x08;
@@ -52,7 +52,7 @@ impl Ppu {
 		ppu
 	}
 	fn update_tileset_win(&mut self, memory_bus: &mut MemoryBus) {
-		for (id_bank, bank) in memory_bus.video_ram.tiles.iter().enumerate() {
+		for (id_bank, bank) in memory_bus.ppu_memory.tiles.iter().enumerate() {
 			for (id_tile, tile) in bank.iter().enumerate() {
 				for (id_row, row) in tile.iter().enumerate() {
 					for (pixel_id, pixel) in row.iter().enumerate() {
@@ -83,8 +83,8 @@ impl Ppu {
 	fn update_tilemap_buf(&mut self, memory_bus: &mut MemoryBus) {
 		for y in 0..TILEMAP_NB_TILES_HEIGHT {
 			for x in 0..TILEMAP_NB_TILES_WIDTH {
-				let tile_index = memory_bus.video_ram.get_bg_tile_index(x as u8, y as u8);
-				let tile = memory_bus.video_ram.get_bg_win_tile(tile_index);
+				let tile_index = memory_bus.ppu_memory.get_bg_tile_index(x as u8, y as u8);
+				let tile = memory_bus.ppu_memory.get_bg_win_tile(tile_index);
 				for (row_index, row) in tile.iter().enumerate() {
 					for (pixel_index, pixel) in row.iter().enumerate() {
 						self.tilemap_buf[
@@ -93,10 +93,10 @@ impl Ppu {
 							x * TILE_WIDTH +
 							pixel_index
 						] =	match pixel {
-							TilePixel::Zero => self.palette_translation[&memory_bus.video_ram.background_palette[0]],
-							TilePixel::One => self.palette_translation[&memory_bus.video_ram.background_palette[1]],
-							TilePixel::Two => self.palette_translation[&memory_bus.video_ram.background_palette[2]],
-							TilePixel::Three => self.palette_translation[&memory_bus.video_ram.background_palette[3]],
+							TilePixel::Zero => self.palette_translation[&memory_bus.ppu_memory.background_palette[0]],
+							TilePixel::One => self.palette_translation[&memory_bus.ppu_memory.background_palette[1]],
+							TilePixel::Two => self.palette_translation[&memory_bus.ppu_memory.background_palette[2]],
+							TilePixel::Three => self.palette_translation[&memory_bus.ppu_memory.background_palette[3]],
 						}
 					}
 				}
@@ -105,32 +105,32 @@ impl Ppu {
 	}
 	fn update_viewport(&mut self, memory_bus: &mut MemoryBus) {
 		for y in 0..VIEWPORT_PX_HEIGHT {
-			if !memory_bus.video_ram.lcd_enable {break};
-			memory_bus.video_ram.ly_ram = y as u8;
+			if !memory_bus.ppu_memory.lcd_enable {break};
+			memory_bus.ppu_memory.ly_ram = y as u8;
 			for x in 0..VIEWPORT_PX_WIDTH {
-				if memory_bus.video_ram.bg_win_enable {
+				if memory_bus.ppu_memory.bg_win_enable {
 					self.viewport_buffer[y * VIEWPORT_PX_WIDTH + x] = self.tilemap_buf[
-						((memory_bus.video_ram.scy_ram as usize + y) % TILEMAP_PX_HEIGHT) * TILEMAP_PX_WIDTH +
-						(memory_bus.video_ram.scx_ram as usize + x) % TILEMAP_PX_WIDTH
+						((memory_bus.ppu_memory.scy_ram as usize + y) % TILEMAP_PX_HEIGHT) * TILEMAP_PX_WIDTH +
+						(memory_bus.ppu_memory.scx_ram as usize + x) % TILEMAP_PX_WIDTH
 					]
 				} else {
 					self.viewport_buffer[y * VIEWPORT_PX_WIDTH + x] = self.palette_translation[&PixelColour::White];
 				}
 			}
 		}
-		memory_bus.video_ram.ly_ram = VIEWPORT_PX_HEIGHT as u8;
+		memory_bus.ppu_memory.ly_ram = VIEWPORT_PX_HEIGHT as u8;
 		self.viewport
 			.update_with_buffer(&self.viewport_buffer, VIEWPORT_PX_WIDTH, VIEWPORT_PX_HEIGHT)
 			.unwrap();
 	}
 	fn update_tilemap_win(&mut self, memory_bus: &mut MemoryBus) {
 			for x in 0..VIEWPORT_PX_WIDTH {
-				self.tilemap_buf[memory_bus.video_ram.scy_ram as usize * TILEMAP_PX_WIDTH + (memory_bus.video_ram.scx_ram as usize + x) % TILEMAP_PX_WIDTH] = 0x00FF0000;
-				self.tilemap_buf[((memory_bus.video_ram.scy_ram as usize + VIEWPORT_PX_HEIGHT - 1) % TILEMAP_PX_HEIGHT) * TILEMAP_PX_WIDTH + (memory_bus.video_ram.scx_ram as usize + x) % TILEMAP_PX_WIDTH] = 0x00FF0000;
+				self.tilemap_buf[memory_bus.ppu_memory.scy_ram as usize * TILEMAP_PX_WIDTH + (memory_bus.ppu_memory.scx_ram as usize + x) % TILEMAP_PX_WIDTH] = 0x00FF0000;
+				self.tilemap_buf[((memory_bus.ppu_memory.scy_ram as usize + VIEWPORT_PX_HEIGHT - 1) % TILEMAP_PX_HEIGHT) * TILEMAP_PX_WIDTH + (memory_bus.ppu_memory.scx_ram as usize + x) % TILEMAP_PX_WIDTH] = 0x00FF0000;
 			}
 			for y in 0..VIEWPORT_PX_HEIGHT {
-				self.tilemap_buf[((memory_bus.video_ram.scy_ram as usize + y) % TILEMAP_PX_HEIGHT) * TILEMAP_PX_WIDTH + memory_bus.video_ram.scx_ram as usize] = 0x00FF0000;
-				self.tilemap_buf[((memory_bus.video_ram.scy_ram as usize + y) % TILEMAP_PX_HEIGHT) * TILEMAP_PX_WIDTH + (memory_bus.video_ram.scx_ram as usize + VIEWPORT_PX_WIDTH) % TILEMAP_PX_WIDTH - 1] = 0x00FF0000;
+				self.tilemap_buf[((memory_bus.ppu_memory.scy_ram as usize + y) % TILEMAP_PX_HEIGHT) * TILEMAP_PX_WIDTH + memory_bus.ppu_memory.scx_ram as usize] = 0x00FF0000;
+				self.tilemap_buf[((memory_bus.ppu_memory.scy_ram as usize + y) % TILEMAP_PX_HEIGHT) * TILEMAP_PX_WIDTH + (memory_bus.ppu_memory.scx_ram as usize + VIEWPORT_PX_WIDTH) % TILEMAP_PX_WIDTH - 1] = 0x00FF0000;
 			}
 			self.tilemap_viewer
 				.update_with_buffer(&self.tilemap_buf, TILEMAP_PX_WIDTH, TILEMAP_PX_HEIGHT)
@@ -166,7 +166,7 @@ mod tests {
 			let tile_index =	(i / TILE_WIDTH / TILE_HEIGHT) % (TILESET_NB_TILES_HEIGHT * TILESET_NB_TILES_WIDTH);
 			let tile_row =	(i / TILE_WIDTH) % TILE_HEIGHT ;
 			let tile_pixel =	 i % TILE_WIDTH;
-			memory_bus.video_ram.tiles[tiles_bank][tile_index][tile_row][tile_pixel] = match tiles_bank {
+			memory_bus.ppu_memory.tiles[tiles_bank][tile_index][tile_row][tile_pixel] = match tiles_bank {
 				0 => TilePixel::One,
 				1 => TilePixel::Two,
 				2 => TilePixel::Three,
@@ -179,14 +179,14 @@ mod tests {
 	fn test_tileset_direct() {
 		let mut memory_bus = MemoryBus::new();
 		let mut ppu = Ppu::new();
-		memory_bus.video_ram.tiles[0][0x19][0] = [TilePixel::Zero, TilePixel::Zero, TilePixel::One, TilePixel::One, TilePixel::One, TilePixel::One, TilePixel::Zero, TilePixel::Zero];
-		memory_bus.video_ram.tiles[0][0x19][1] = [TilePixel::Zero, TilePixel::One, TilePixel::Zero, TilePixel::Zero, TilePixel::Zero, TilePixel::Zero, TilePixel::One, TilePixel::Zero];
-		memory_bus.video_ram.tiles[0][0x19][2] = [TilePixel::One, TilePixel::Zero, TilePixel::One, TilePixel::One, TilePixel::One, TilePixel::Zero, TilePixel::Zero, TilePixel::One];
-		memory_bus.video_ram.tiles[0][0x19][3] = [TilePixel::One, TilePixel::Zero, TilePixel::One, TilePixel::Zero, TilePixel::Zero, TilePixel::One, TilePixel::Zero, TilePixel::One];
-		memory_bus.video_ram.tiles[0][0x19][4] = [TilePixel::One, TilePixel::Zero, TilePixel::One, TilePixel::One, TilePixel::One, TilePixel::Zero, TilePixel::Zero, TilePixel::One];
-		memory_bus.video_ram.tiles[0][0x19][5] = [TilePixel::One, TilePixel::Zero, TilePixel::One, TilePixel::Zero, TilePixel::Zero, TilePixel::One, TilePixel::Zero, TilePixel::One];
-		memory_bus.video_ram.tiles[0][0x19][6] = [TilePixel::Zero, TilePixel::One, TilePixel::Zero, TilePixel::Zero, TilePixel::Zero, TilePixel::Zero, TilePixel::One, TilePixel::Zero];
-		memory_bus.video_ram.tiles[0][0x19][7] = [TilePixel::Zero, TilePixel::Zero, TilePixel::One, TilePixel::One, TilePixel::One, TilePixel::One, TilePixel::Zero, TilePixel::Zero];
+		memory_bus.ppu_memory.tiles[0][0x19][0] = [TilePixel::Zero, TilePixel::Zero, TilePixel::One, TilePixel::One, TilePixel::One, TilePixel::One, TilePixel::Zero, TilePixel::Zero];
+		memory_bus.ppu_memory.tiles[0][0x19][1] = [TilePixel::Zero, TilePixel::One, TilePixel::Zero, TilePixel::Zero, TilePixel::Zero, TilePixel::Zero, TilePixel::One, TilePixel::Zero];
+		memory_bus.ppu_memory.tiles[0][0x19][2] = [TilePixel::One, TilePixel::Zero, TilePixel::One, TilePixel::One, TilePixel::One, TilePixel::Zero, TilePixel::Zero, TilePixel::One];
+		memory_bus.ppu_memory.tiles[0][0x19][3] = [TilePixel::One, TilePixel::Zero, TilePixel::One, TilePixel::Zero, TilePixel::Zero, TilePixel::One, TilePixel::Zero, TilePixel::One];
+		memory_bus.ppu_memory.tiles[0][0x19][4] = [TilePixel::One, TilePixel::Zero, TilePixel::One, TilePixel::One, TilePixel::One, TilePixel::Zero, TilePixel::Zero, TilePixel::One];
+		memory_bus.ppu_memory.tiles[0][0x19][5] = [TilePixel::One, TilePixel::Zero, TilePixel::One, TilePixel::Zero, TilePixel::Zero, TilePixel::One, TilePixel::Zero, TilePixel::One];
+		memory_bus.ppu_memory.tiles[0][0x19][6] = [TilePixel::Zero, TilePixel::One, TilePixel::Zero, TilePixel::Zero, TilePixel::Zero, TilePixel::Zero, TilePixel::One, TilePixel::Zero];
+		memory_bus.ppu_memory.tiles[0][0x19][7] = [TilePixel::Zero, TilePixel::Zero, TilePixel::One, TilePixel::One, TilePixel::One, TilePixel::One, TilePixel::Zero, TilePixel::Zero];
 		loop {
 			ppu.update(&mut memory_bus);						// Should display an ® logo in tile {1; 9}
 		}
@@ -195,14 +195,14 @@ mod tests {
 	fn test_tileset_generation() {
 		let mut memory_bus = MemoryBus::new();
 		let mut ppu = Ppu::new();
-		memory_bus.video_ram.write(0x190, 0x3c);
-		memory_bus.video_ram.write(0x192, 0x42);
-		memory_bus.video_ram.write(0x194, 0xb9);
-		memory_bus.video_ram.write(0x196, 0xa5);
-		memory_bus.video_ram.write(0x198, 0xb9);
-		memory_bus.video_ram.write(0x19a, 0xa5);
-		memory_bus.video_ram.write(0x19c, 0x42);
-		memory_bus.video_ram.write(0x19e, 0x3c);
+		memory_bus.ppu_memory.write(0x190, 0x3c);
+		memory_bus.ppu_memory.write(0x192, 0x42);
+		memory_bus.ppu_memory.write(0x194, 0xb9);
+		memory_bus.ppu_memory.write(0x196, 0xa5);
+		memory_bus.ppu_memory.write(0x198, 0xb9);
+		memory_bus.ppu_memory.write(0x19a, 0xa5);
+		memory_bus.ppu_memory.write(0x19c, 0x42);
+		memory_bus.ppu_memory.write(0x19e, 0x3c);
 		loop {
 			ppu.update(&mut memory_bus);						// Should display an ® logo in tile {1; 9}
 		}
@@ -218,10 +218,10 @@ mod tests {
 		while cpu.registers.program_counter - 1 != 0x55 {
 			cpu.tick(&mut memory_bus);
 		}
-		memory_bus.video_ram.bg_win_enable = true;
-		memory_bus.video_ram.using_fully_common_bg_tileset = true;
-		memory_bus.video_ram.lcd_enable = true;
-		memory_bus.video_ram.bg_tilemap0 = [
+		memory_bus.ppu_memory.bg_win_enable = true;
+		memory_bus.ppu_memory.using_fully_common_bg_tileset = true;
+		memory_bus.ppu_memory.lcd_enable = true;
+		memory_bus.ppu_memory.bg_tilemap0 = [
 			[0x19, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x19],
 			[0x00, 0x19, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x19, 0x00],
 			[0x00, 0x00, 0x19, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x19, 0x00, 0x00],
