@@ -11,7 +11,7 @@ pub struct MemoryBus {
 	pub cartr_ram: [u8; 0x2000],		// 0xA000 - 0xBFFF
 	pub intern_ram: [u8; 0x2000],		// 0xC000 - 0xDFFF
 /* echo of intern_ram: [u8; 0x1E00] */	// 0xE000 - 0xFDFF
-	pub sprite_oam: [u8; 0x00A0],		// 0xFE00 - 0xFE9F
+	pub oam: [u8; 0x00A0],				// 0xFE00 - 0xFE9F
 /* unmapped memory: [u8; 0x0060] */		// 0xFEA0 - 0xFEFF
 	pub io_regis: [u8; 0x0080],			// 0xFF00 - 0xFF7F
 	pub high_intern_ram: [u8; 0x007F],	// 0xFF80 - 0xFFFE
@@ -28,7 +28,7 @@ impl MemoryBus {
 			video_ram: VideoRam::new(),
 			cartr_ram: [0; 0x2000],
 			intern_ram: [0; 0x2000],
-			sprite_oam: [0; 0x00A0],
+			oam: [0; 0x00A0],
 			io_regis: [0; 0x0080],
 			high_intern_ram: [0; 0x007F],
 			interrupt_enable: 0
@@ -111,11 +111,12 @@ impl MemoryBus {
 			0xA000..=0xBFFF	=>		 self.cartr_ram[(address - 0xA000) as usize],
 			0xC000..=0xDFFF	=>		self.intern_ram[(address - 0xC000) as usize],
 			0xE000..=0xFDFF	=>		self.intern_ram[(address - 0xE000) as usize],
-			0xFE00..=0xFE9F	=>		self.sprite_oam[(address - 0xFE00) as usize],
+			0xFE00..=0xFE9F	=>		self.oam[(address - 0xFE00) as usize],
 			0xFEA0..=0xFEFF	=> 0,
 			0xFF40 | 0xFF47 =>		self.video_ram.read(address as usize),
 			0xFF42			=>		self.video_ram.scy_ram,
 			0xFF43			=>		self.video_ram.scx_ram,
+			0xFF44			=>		self.video_ram.ly_ram,
 			0xFF00..=0xFF7F	=>		  self.io_regis[(address - 0xFF00) as usize],
 			0xFF80..=0xFFFE	=> self.high_intern_ram[(address - 0xFF80) as usize],
 			0xFFFF			=> self.interrupt_enable
@@ -131,11 +132,12 @@ impl MemoryBus {
 			0xA000..=0xBFFF	=>		 {self.cartr_ram[(address - 0xA000) as usize] = data},
 			0xC000..=0xDFFF	=>		{self.intern_ram[(address - 0xC000) as usize] = data},
 			0xE000..=0xFDFF	=>		{self.intern_ram[(address - 0xE000) as usize] = data},
-			0xFE00..=0xFE9F	=>		{self.sprite_oam[(address - 0xFE00) as usize] = data},
+			0xFE00..=0xFE9F	=>		{self.oam[(address - 0xFE00) as usize] = data},
 			0xFEA0..=0xFEFF	=> {},
 			0xFF40 | 0xFF47 =>		  self.video_ram.write(address as usize, data),
 			0xFF42			=>		 {self.video_ram.scy_ram = data},
 			0xFF43			=>		 {self.video_ram.scx_ram = data},
+			0xFF44			=>		 {self.video_ram.ly_ram = data},
 			0xFF00..=0xFF7F	=>		  {self.io_regis[(address - 0xFF00) as usize] = data},
 			0xFF80..=0xFFFE	=> {self.high_intern_ram[(address - 0xFF80) as usize] = data},
 			0xFFFF			=> {self.interrupt_enable = data}

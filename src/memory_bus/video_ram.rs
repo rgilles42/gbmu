@@ -16,16 +16,25 @@ pub enum PixelColour {
 }
 pub struct VideoRam {
 	pub is_locked: bool,
+
 	video_ram: [u8; 0x2000],
 	lcdc_ram: u8,							// 0xFF40
 	pub scy_ram: u8,						// 0xFF42
 	pub scx_ram: u8,						// 0xFF43
+	pub ly_ram: u8,							// 0xFF44
 	bgp_ram: u8,							// 0xFF47
+
 	pub tiles: [[Tile; 0x80]; 3],			// 0x8000 - 0x97FF
 	pub bg_tilemap0: [[u8; 0x20]; 0x20],	// 0x9800 - 0x9BFF
 	pub bg_tilemap1: [[u8; 0x20]; 0x20],	// 0x9C00 - 0x9FFF
+	pub lcd_enable: bool,					// 0xFF40 & (1 << 7)
+	pub win_using_secondary_tilemap: bool,	// 0xFF40 & (1 << 6)
+	// pub win_enable: bool,					// 0xFF40 & (1 << 5)
 	pub using_fully_common_bg_tileset: bool,// 0xFF40 & (1 << 4)
-	pub using_secondary_tilemap: bool,		// 0xFF40 & (1 << 5)
+	pub bg_using_secondary_tilemap: bool,	// 0xFF40 & (1 << 3)
+	// pub double_heigth_obj: bool,			// 0xFF40 & (1 << 2)
+	// pub obj_enable: bool,					// 0xFF40 & (1 << 1)
+	pub bg_win_enable: bool,				// 0xFF40 & (1 << 0)
 	pub background_palette: [PixelColour; 4]// 0xFF47
 }
 
@@ -38,11 +47,18 @@ impl VideoRam {
 			bgp_ram: 0,
 			scx_ram: 0,
 			scy_ram: 0,
+			ly_ram: 153,
 			tiles: [ [[[TilePixel::Zero;8];8];0x80]; 3],
 			bg_tilemap0: [[0; 0x20]; 0x20],
 			bg_tilemap1: [[0; 0x20]; 0x20],
-			using_fully_common_bg_tileset: true,
-			using_secondary_tilemap: false,
+			lcd_enable: false,
+			win_using_secondary_tilemap: false,
+			// win_enable: false,
+			using_fully_common_bg_tileset: false,
+			bg_using_secondary_tilemap: false,
+			// double_heigth_obj: false,
+			// obj_enable: false,
+			bg_win_enable: false,
 			background_palette: [PixelColour::White, PixelColour::LightGray, PixelColour::DarkGray, PixelColour::Black]
 		}
 	}
@@ -78,8 +94,14 @@ impl VideoRam {
 			}
 		} else if address == 0xFF40 {
 			self.lcdc_ram = data;
-			self.using_fully_common_bg_tileset	= data & (1 << 4) != 0;
-			self.using_secondary_tilemap		= data & (1 << 5) != 0;
+			self.lcd_enable						= (data & (1 << 7)) != 0;
+			self.win_using_secondary_tilemap	= (data & (1 << 6)) != 0;
+			// self.win_enable						= (data & (1 << 5)) != 0;
+			self.using_fully_common_bg_tileset	= (data & (1 << 4)) != 0;
+			self.bg_using_secondary_tilemap		= (data & (1 << 3)) != 0;
+			// self.double_heigth_obj				= (data & (1 << 2)) != 0;
+			// self.obj_enable						= (data & (1 << 1)) != 0;
+			self.bg_win_enable					= (data & 1) != 0;
 		}
 		else {										// 0xFF47
 			self.bgp_ram = data;
@@ -106,27 +128,35 @@ impl VideoRam {
 		}
 	}
 	pub fn get_bg_tile_index(&self, x: u8, y: u8) -> u8{
-		if self.using_secondary_tilemap {
+		if self.bg_using_secondary_tilemap {
 			self.bg_tilemap1[y as usize][x as usize]
 		} else {
 			self.bg_tilemap0[y as usize][x as usize]
 		}
 		
 	}
-	pub fn get_bg_tile(&self, mut tile_index: u8) -> Tile {
+	// pub fn get_win_tile_index(&self, x: u8, y: u8) -> u8{
+	// 	if self.win_using_secondary_tilemap {
+	// 		self.bg_tilemap1[y as usize][x as usize]
+	// 	} else {
+	// 		self.bg_tilemap0[y as usize][x as usize]
+	// 	}
+		
+	// }
+	pub fn get_bg_win_tile(&self, mut tile_index: u8) -> Tile {
 		let tile_reg = if tile_index >= 128 {
 			tile_index -= 128;
 			1
 		} else { if self.using_fully_common_bg_tileset {0} else {2} };
 		self.tiles[tile_reg][tile_index as usize]
 	}
-	pub fn get_obj_tile(&self, mut tile_index: u8) -> Tile {
-		let tile_reg = if tile_index >= 128 {tile_index -= 128; 1} else {0};
-		self.tiles[tile_reg][tile_index as usize]
-	}
-	pub fn get_large_obj_tiles(&self, tile_index: u8) -> (Tile, Tile) {
-		let mut tile_index = tile_index & 0xFE;
-		let tile_reg = if tile_index >= 128 {tile_index -= 128; 1} else {0};
-		(self.tiles[tile_reg][tile_index as usize], self.tiles[tile_reg][tile_index as usize + 1])
-	}
+	// pub fn get_obj_tile(&self, mut tile_index: u8) -> Tile {
+	// 	let tile_reg = if tile_index >= 128 {tile_index -= 128; 1} else {0};
+	// 	self.tiles[tile_reg][tile_index as usize]
+	// }
+	// pub fn get_large_obj_tiles(&self, tile_index: u8) -> (Tile, Tile) {
+	// 	let mut tile_index = tile_index & 0xFE;
+	// 	let tile_reg = if tile_index >= 128 {tile_index -= 128; 1} else {0};
+	// 	(self.tiles[tile_reg][tile_index as usize], self.tiles[tile_reg][tile_index as usize + 1])
+	// }
 }

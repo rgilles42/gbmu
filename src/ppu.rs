@@ -9,31 +9,23 @@ const TILE_HEIGHT: usize = 0x08;
 
 const TILESET_NB_TILES_WIDTH: usize		= 0x10;
 const TILESET_NB_TILES_HEIGHT: usize	= 0x08;
-
 const TILESET_PX_WIDTH: usize	= TILE_WIDTH * TILESET_NB_TILES_WIDTH;
 const TILESET_PX_HEIGHT: usize	= TILE_HEIGHT * TILESET_NB_TILES_HEIGHT;
 const TILESET_PX_SIZE: usize	= TILESET_PX_WIDTH * TILESET_PX_HEIGHT;
-
-const NB_TILESETS: usize = 3;
+const TILESETS_NB: usize = 3;
 const TILESET_VIEWER_PX_WIDTH: usize	= TILESET_PX_WIDTH;
-const TILESET_VIEWER_PX_HEIGHT: usize	= TILESET_PX_HEIGHT * NB_TILESETS;
+const TILESET_VIEWER_PX_HEIGHT: usize	= TILESET_PX_HEIGHT * TILESETS_NB;
 const TILESET_VIEWER_PX_SIZE: usize		= TILESET_VIEWER_PX_WIDTH * TILESET_VIEWER_PX_HEIGHT;
 
 const TILEMAP_NB_TILES_WIDTH: usize		= 0x20;
 const TILEMAP_NB_TILES_HEIGHT: usize	= 0x20;
-
 const TILEMAP_PX_WIDTH: usize	= TILE_WIDTH * TILEMAP_NB_TILES_WIDTH;
 const TILEMAP_PX_HEIGHT: usize	= TILE_HEIGHT * TILEMAP_NB_TILES_HEIGHT;
 const TILEMAP_PX_SIZE: usize	= TILEMAP_PX_WIDTH * TILEMAP_PX_HEIGHT;
 
-const NB_TILEMAPS: usize = 1;
-const TILEMAP_VIEWER_PX_WIDTH: usize	= TILEMAP_PX_WIDTH;
-const TILEMAP_VIEWER_PX_HEIGHT: usize	= TILEMAP_PX_HEIGHT * NB_TILEMAPS;
-const TILEMAP_VIEWER_PX_SIZE: usize		= TILEMAP_VIEWER_PX_WIDTH * TILEMAP_VIEWER_PX_HEIGHT;
-
 const VIEWPORT_PX_WIDTH: usize	= 160;
 const VIEWPORT_PX_HEIGHT: usize	= 144;
-const VIEWPORT_PX_SIZE: usize	= 23040;
+const VIEWPORT_PX_SIZE: usize	= VIEWPORT_PX_WIDTH * VIEWPORT_PX_HEIGHT;
 
 pub struct Ppu {
 	palette_translation: HashMap<PixelColour, u32>,
@@ -51,14 +43,14 @@ impl Ppu {
 			palette_translation: HashMap::from([(PixelColour::White, 0x00FFFFFF), (PixelColour::LightGray, 0x00A9A9A9), (PixelColour::DarkGray, 0x00545454), (PixelColour::Black, 0x00000000)]),
 			tileset_viewer: Window::new("Tileset", TILESET_VIEWER_PX_WIDTH, TILESET_VIEWER_PX_HEIGHT, WindowOptions {scale: minifb::Scale::X4,..WindowOptions::default()}).unwrap(),
 			tileset_window_buf: vec![0; TILESET_VIEWER_PX_SIZE],
-			tilemap_viewer: Window::new("Tilemap", TILEMAP_VIEWER_PX_WIDTH, TILEMAP_VIEWER_PX_HEIGHT, WindowOptions {scale: minifb::Scale::X4,..WindowOptions::default()}).unwrap(),
-			tilemap_buf: vec![0; TILEMAP_VIEWER_PX_SIZE],
+			tilemap_viewer: Window::new("Tilemap", TILEMAP_PX_WIDTH, TILEMAP_PX_HEIGHT, WindowOptions {scale: minifb::Scale::X4,..WindowOptions::default()}).unwrap(),
+			tilemap_buf: vec![0; TILEMAP_PX_SIZE],
 			viewport: Window::new("GBMU", VIEWPORT_PX_WIDTH, VIEWPORT_PX_HEIGHT, WindowOptions {scale: minifb::Scale::X4,..WindowOptions::default()}).unwrap(),
 			viewport_buffer: vec![0; VIEWPORT_PX_SIZE]
 		};
 		ppu
 	}
-	fn update_tileset_win_buf(&mut self, memory_bus: &mut MemoryBus) {
+	fn update_tileset_win(&mut self, memory_bus: &mut MemoryBus) {
 		for (id_bank, bank) in memory_bus.video_ram.tiles.iter().enumerate() {
 			for (id_tile, tile) in bank.iter().enumerate() {
 				for (id_row, row) in tile.iter().enumerate() {
@@ -91,7 +83,7 @@ impl Ppu {
 		for y in 0..TILEMAP_NB_TILES_HEIGHT {
 			for x in 0..TILEMAP_NB_TILES_WIDTH {
 				let tile_index = memory_bus.video_ram.get_bg_tile_index(x as u8, y as u8);
-				let tile = memory_bus.video_ram.get_bg_tile(tile_index);
+				let tile = memory_bus.video_ram.get_bg_win_tile(tile_index);
 				for (row_index, row) in tile.iter().enumerate() {
 					for (pixel_index, pixel) in row.iter().enumerate() {
 						self.tilemap_buf[
@@ -109,15 +101,28 @@ impl Ppu {
 				}
 			}
 		}
+	}
+	fn update_viewport(&mut self, memory_bus: &mut MemoryBus) {
 		for y in 0..VIEWPORT_PX_HEIGHT {
+			if !memory_bus.video_ram.lcd_enable {break};
+			memory_bus.video_ram.ly_ram = y as u8;
 			for x in 0..VIEWPORT_PX_WIDTH {
-				self.viewport_buffer[y * VIEWPORT_PX_WIDTH + x] = self.tilemap_buf[
-					((memory_bus.video_ram.scy_ram as usize + y) % TILEMAP_PX_HEIGHT) * TILEMAP_PX_WIDTH +
-					(memory_bus.video_ram.scx_ram as usize + x) % TILEMAP_PX_WIDTH
-				]
+				if memory_bus.video_ram.bg_win_enable {
+					self.viewport_buffer[y * VIEWPORT_PX_WIDTH + x] = self.tilemap_buf[
+						((memory_bus.video_ram.scy_ram as usize + y) % TILEMAP_PX_HEIGHT) * TILEMAP_PX_WIDTH +
+						(memory_bus.video_ram.scx_ram as usize + x) % TILEMAP_PX_WIDTH
+					]
+				} else {
+					self.viewport_buffer[y * VIEWPORT_PX_WIDTH + x] = self.palette_translation[&PixelColour::White];
+				}
 			}
 		}
-		if self.tilemap_viewer.is_open() && !self.tilemap_viewer.is_key_down(Key::Escape) {
+		memory_bus.video_ram.ly_ram = VIEWPORT_PX_HEIGHT as u8;
+		self.viewport
+			.update_with_buffer(&self.viewport_buffer, VIEWPORT_PX_WIDTH, VIEWPORT_PX_HEIGHT)
+			.unwrap();
+	}
+	fn update_tilemap_win(&mut self, memory_bus: &mut MemoryBus) {
 			for x in 0..VIEWPORT_PX_WIDTH {
 				self.tilemap_buf[memory_bus.video_ram.scy_ram as usize * TILEMAP_PX_WIDTH + (memory_bus.video_ram.scx_ram as usize + x) % TILEMAP_PX_WIDTH] = 0x00FF0000;
 				self.tilemap_buf[((memory_bus.video_ram.scy_ram as usize + VIEWPORT_PX_HEIGHT - 1) % TILEMAP_PX_HEIGHT) * TILEMAP_PX_WIDTH + (memory_bus.video_ram.scx_ram as usize + x) % TILEMAP_PX_WIDTH] = 0x00FF0000;
@@ -127,23 +132,18 @@ impl Ppu {
 				self.tilemap_buf[((memory_bus.video_ram.scy_ram as usize + y) % TILEMAP_PX_HEIGHT) * TILEMAP_PX_WIDTH + (memory_bus.video_ram.scx_ram as usize + VIEWPORT_PX_WIDTH) % TILEMAP_PX_WIDTH - 1] = 0x00FF0000;
 			}
 			self.tilemap_viewer
-				.update_with_buffer(&self.tilemap_buf, TILEMAP_VIEWER_PX_WIDTH, TILEMAP_VIEWER_PX_HEIGHT)
+				.update_with_buffer(&self.tilemap_buf, TILEMAP_PX_WIDTH, TILEMAP_PX_HEIGHT)
 				.unwrap();
-		}
-	}
-	fn update_viewport_buf(&mut self, memory_bus: &mut MemoryBus) {
-		if self.viewport.is_open() && !self.viewport.is_key_down(Key::Escape) {
-			self.viewport
-				.update_with_buffer(&self.viewport_buffer, VIEWPORT_PX_WIDTH, VIEWPORT_PX_HEIGHT)
-				.unwrap();
-		}
 	}
 	pub fn update(&mut self, memory_bus: &mut MemoryBus) {
 		if self.tileset_viewer.is_open() && !self.tileset_viewer.is_key_down(Key::Escape) {
-			self.update_tileset_win_buf(memory_bus);
+			self.update_tileset_win(memory_bus);
 		}
 		self.update_tilemap_buf(memory_bus);
-		self.update_viewport_buf(memory_bus);
+		self.update_viewport(memory_bus);
+		if self.tilemap_viewer.is_open() && !self.tilemap_viewer.is_key_down(Key::Escape) {
+			self.update_tilemap_win(memory_bus);
+		}
 	}
 }
 
@@ -161,7 +161,7 @@ mod tests {
 		ppu.update(&mut memory_bus);
 		std::thread::sleep(std::time::Duration::from_millis(1000));
 		for i in 0..0x6000 {
-			let tiles_bank =	(i / TILE_WIDTH / TILE_HEIGHT / TILESET_NB_TILES_HEIGHT / TILESET_NB_TILES_WIDTH ) % NB_TILESETS;
+			let tiles_bank =	(i / TILE_WIDTH / TILE_HEIGHT / TILESET_NB_TILES_HEIGHT / TILESET_NB_TILES_WIDTH ) % TILESETS_NB;
 			let tile_index =	(i / TILE_WIDTH / TILE_HEIGHT) % (TILESET_NB_TILES_HEIGHT * TILESET_NB_TILES_WIDTH);
 			let tile_row =	(i / TILE_WIDTH) % TILE_HEIGHT ;
 			let tile_pixel =	 i % TILE_WIDTH;
@@ -207,7 +207,7 @@ mod tests {
 		}
 	}
 	#[test]
-	fn test_tilemap_composition() {
+	fn test_tilemap_and_viewport_composition() {
 		let mut memory_bus = MemoryBus::new();
 		let mut ppu = Ppu::new();
 		let mut cpu = crate::Cpu::new();
@@ -217,6 +217,9 @@ mod tests {
 		while cpu.registers.program_counter - 1 != 0x55 {
 			cpu.tick(&mut memory_bus);
 		}
+		memory_bus.video_ram.bg_win_enable = true;
+		memory_bus.video_ram.using_fully_common_bg_tileset = true;
+		memory_bus.video_ram.lcd_enable = true;
 		memory_bus.video_ram.bg_tilemap0 = [
 			[0x19, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x19],
 			[0x00, 0x19, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x19, 0x00],
