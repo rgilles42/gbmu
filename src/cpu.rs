@@ -60,6 +60,6 @@ impl Cpu {
 
 impl Debug for Cpu {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Cpu").field("registers", &self.registers).field("current_op", &self.current_op).finish()
+        f.debug_struct("Cpu").field("regs", &self.registers).field("op", &self.next_op).finish()
     }
 }

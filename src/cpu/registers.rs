@@ -6,12 +6,17 @@ const FLAG_N_BYTE_POS:	u8 = 6;
 const FLAG_H_BYTE_POS:	u8 = 5;
 const FLAG_C_BYTE_POS:	u8 = 4;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, PartialEq)]
 pub struct FlagsRegister {
 	pub zero: bool,
 	pub substract: bool,
 	pub half_carry: bool,
 	pub carry: bool
+}
+impl Debug for FlagsRegister {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Flags").field("Z", &self.zero).field("N", &self.substract).field("H", &self.half_carry).field("C", &self.carry).finish()
+    }
 }
 
 impl std::convert::From<FlagsRegister> for u8  {
@@ -144,6 +149,13 @@ impl Registers {
 
 impl Debug for Registers {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Registers").field("program_counter - 1", &self.program_counter.sub(1)).field("a", &self.a).field("bc", &self.get_bc_big_endian()).field("de", &self.get_de_big_endian()).field("hl", &self.get_hl_big_endian()).finish()
+        f.debug_struct("Registers")
+			.field("pc", &self.program_counter.sub(1))
+			.field("a", &self.a)
+			.field("flags", &self.f)
+			.field("bc", &self.get_bc_big_endian())
+			.field("de", &self.get_de_big_endian())
+			.field("hl", &self.get_hl_big_endian())
+			.finish()
     }
 }
