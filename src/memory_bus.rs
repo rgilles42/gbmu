@@ -66,6 +66,10 @@ impl MemoryBus {
 		for (i, byte) in logo_data.iter().enumerate() {
 			self.rom_bank0[0x104 + i] = *byte;
 		}
+		self.rom_bank0[0x134] = 0xE7;
+		for i in 0x135..0x14E {
+			self.rom_bank0[i] = 0x00;
+		}
 	}
 	// pub fn init(&mut self) {
 	// 	self.write_byte(0xFF05, 0x00);
