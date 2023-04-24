@@ -105,7 +105,6 @@ impl PPUMemory {
 
 		} else if address == 0xFF40 {
 			self.lcdc_ram = data;
-			self.lcd_enable						= (data & (1 << 7)) != 0;
 			self.win_using_secondary_tilemap	= (data & (1 << 6)) != 0;
 			// self.win_enable						= (data & (1 << 5)) != 0;
 			self.using_fully_common_bg_tileset	= (data & (1 << 4)) != 0;
@@ -113,6 +112,12 @@ impl PPUMemory {
 			// self.double_heigth_obj				= (data & (1 << 2)) != 0;
 			// self.obj_enable						= (data & (1 << 1)) != 0;
 			self.bg_win_enable					= (data & 1) != 0;
+			let new_lcd_enable			= (data & (1 << 7)) != 0;
+			if self.lcd_enable != new_lcd_enable {
+				if new_lcd_enable	{self.is_oam_locked = true;		self.is_vram_locked = false;}	// LCD/PPU is enabled and immediately enters OAM Scan (Mode 2)
+				else				{self.is_oam_locked = false;	self.is_vram_locked = false;}	// LCD/PPU is disabled, freeing all access to display memory;
+				self.lcd_enable = new_lcd_enable;
+			}
 		}
 		else {										// 0xFF47
 			self.bgp_ram = data;

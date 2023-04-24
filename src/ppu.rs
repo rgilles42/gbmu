@@ -27,7 +27,16 @@ const VIEWPORT_PX_WIDTH: usize	= 160;
 const VIEWPORT_PX_HEIGHT: usize	= 144;
 const VIEWPORT_PX_SIZE: usize	= VIEWPORT_PX_WIDTH * VIEWPORT_PX_HEIGHT;
 
+#[derive(Debug, Clone, Copy)]
+enum PPUModes {
+	OAMSearch(u8, usize),
+	LineDraw(u8, usize),
+	HBlank(u8, usize),
+	VBlank(u8, usize)
+}
+
 pub struct Ppu {
+	ppu_mode: PPUModes,
 	palette_translation: HashMap<PixelColour, u32>,
 
 	tileset_viewer: Window,
@@ -41,6 +50,7 @@ pub struct Ppu {
 impl Ppu {
 	pub fn new() -> Ppu {
 		let ppu = Ppu {
+			ppu_mode: PPUModes::OAMSearch(0, 0),
 			palette_translation: HashMap::from([(PixelColour::White, 0x00FFFFFF), (PixelColour::LightGray, 0x00A9A9A9), (PixelColour::DarkGray, 0x00545454), (PixelColour::Black, 0x00000000)]),
 			tileset_viewer: Window::new("Tileset", TILESET_VIEWER_PX_WIDTH, TILESET_VIEWER_PX_HEIGHT, WindowOptions {scale: minifb::Scale::X4,..WindowOptions::default()}).unwrap(),
 			tileset_window_buf: vec![0; TILESET_VIEWER_PX_SIZE],
@@ -51,33 +61,41 @@ impl Ppu {
 		};
 		ppu
 	}
-	fn update_tileset_win(&mut self, memory_bus: &mut MemoryBus) {
-		for (id_bank, bank) in memory_bus.ppu_memory.tiles.iter().enumerate() {
-			for (id_tile, tile) in bank.iter().enumerate() {
-				for (id_row, row) in tile.iter().enumerate() {
-					for (pixel_id, pixel) in row.iter().enumerate() {
-						self.tileset_window_buf[
-							id_bank * TILESET_PX_SIZE +
-							(id_tile / TILESET_NB_TILES_WIDTH) * (TILESET_PX_WIDTH * TILE_HEIGHT) +
-							id_row * TILESET_PX_WIDTH +
-							(id_tile % TILESET_NB_TILES_WIDTH) * TILE_WIDTH +
-							pixel_id
-						] =
-						if id_row == 0 || pixel_id == 0 {0x000000FF}
-						else {
-								match pixel {
-									TilePixel::Zero => 0x00FFFFFF,
-									TilePixel::One => 0x00A9A9A9,
-									TilePixel::Two => 0x00545454,
-									TilePixel::Three => 0x00000000,
-								}
-						};
+	fn tick_ppu_mode(&mut self, memory_bus: &mut MemoryBus) {
+		self.ppu_mode = match self.ppu_mode {
+			PPUModes::OAMSearch(line_index, count) =>
+				if count == 79 {
+					memory_bus.ppu_memory.is_vram_locked = true;
+					PPUModes::LineDraw(line_index, 0)
+				} else {
+					PPUModes::OAMSearch(line_index, count + 1)
+				},
+			PPUModes::LineDraw(line_index, count) =>
+				if count == 167 {
+					memory_bus.ppu_memory.is_vram_locked = false;
+					memory_bus.ppu_memory.is_oam_locked = false;
+					PPUModes::HBlank(line_index, count + 1)
+				} else {
+					PPUModes::LineDraw(line_index, count + 1)
+				},
+			PPUModes::HBlank(line_index, count) =>
+				if count == 375 {
+					if line_index == 143 {
+						PPUModes::VBlank(144, 0)
+					} else {
+						memory_bus.ppu_memory.is_oam_locked = true;
+						PPUModes::OAMSearch(line_index + 1, 0)
 					}
-				}
-			}
-			self.tileset_viewer
-				.update_with_buffer(&self.tileset_window_buf, TILESET_VIEWER_PX_WIDTH, TILESET_VIEWER_PX_HEIGHT)
-				.unwrap();
+				} else {
+					PPUModes::HBlank(line_index, count + 1)
+				},
+			PPUModes::VBlank(_, count) =>
+				if count == 4559 {
+					memory_bus.ppu_memory.is_oam_locked = true;
+					PPUModes::OAMSearch(0, 0)
+				} else {
+					PPUModes::VBlank(144 + ((count + 1) / 456) as u8, count + 1)
+				},
 		}
 	}
 	fn update_tilemap_buf(&mut self, memory_bus: &mut MemoryBus) {
@@ -123,27 +141,62 @@ impl Ppu {
 			.update_with_buffer(&self.viewport_buffer, VIEWPORT_PX_WIDTH, VIEWPORT_PX_HEIGHT)
 			.unwrap();
 	}
-	fn update_tilemap_win(&mut self, memory_bus: &mut MemoryBus) {
-			for x in 0..VIEWPORT_PX_WIDTH {
-				self.tilemap_buf[memory_bus.ppu_memory.scy_ram as usize * TILEMAP_PX_WIDTH + (memory_bus.ppu_memory.scx_ram as usize + x) % TILEMAP_PX_WIDTH] = 0x00FF0000;
-				self.tilemap_buf[((memory_bus.ppu_memory.scy_ram as usize + VIEWPORT_PX_HEIGHT - 1) % TILEMAP_PX_HEIGHT) * TILEMAP_PX_WIDTH + (memory_bus.ppu_memory.scx_ram as usize + x) % TILEMAP_PX_WIDTH] = 0x00FF0000;
+	fn update_tileset_win(&mut self, memory_bus: &mut MemoryBus) {
+		for (id_bank, bank) in memory_bus.ppu_memory.tiles.iter().enumerate() {
+			for (id_tile, tile) in bank.iter().enumerate() {
+				for (id_row, row) in tile.iter().enumerate() {
+					for (pixel_id, pixel) in row.iter().enumerate() {
+						self.tileset_window_buf[
+							id_bank * TILESET_PX_SIZE +
+							(id_tile / TILESET_NB_TILES_WIDTH) * (TILESET_PX_WIDTH * TILE_HEIGHT) +
+							id_row * TILESET_PX_WIDTH +
+							(id_tile % TILESET_NB_TILES_WIDTH) * TILE_WIDTH +
+							pixel_id
+						] = if id_row == 0 || pixel_id == 0 {0x000000FF}
+						else {
+							match pixel {
+								TilePixel::Zero => 0x00FFFFFF,
+								TilePixel::One => 0x00A9A9A9,
+								TilePixel::Two => 0x00545454,
+								TilePixel::Three => 0x00000000,
+							}
+						};
+					}
+				}
 			}
-			for y in 0..VIEWPORT_PX_HEIGHT {
-				self.tilemap_buf[((memory_bus.ppu_memory.scy_ram as usize + y) % TILEMAP_PX_HEIGHT) * TILEMAP_PX_WIDTH + memory_bus.ppu_memory.scx_ram as usize] = 0x00FF0000;
-				self.tilemap_buf[((memory_bus.ppu_memory.scy_ram as usize + y) % TILEMAP_PX_HEIGHT) * TILEMAP_PX_WIDTH + (memory_bus.ppu_memory.scx_ram as usize + VIEWPORT_PX_WIDTH) % TILEMAP_PX_WIDTH - 1] = 0x00FF0000;
-			}
-			self.tilemap_viewer
-				.update_with_buffer(&self.tilemap_buf, TILEMAP_PX_WIDTH, TILEMAP_PX_HEIGHT)
+			self.tileset_viewer
+				.update_with_buffer(&self.tileset_window_buf, TILESET_VIEWER_PX_WIDTH, TILESET_VIEWER_PX_HEIGHT)
 				.unwrap();
+		}
+	}
+	fn update_tilemap_win(&mut self, memory_bus: &mut MemoryBus) {
+		for x in 0..VIEWPORT_PX_WIDTH {
+			self.tilemap_buf[memory_bus.ppu_memory.scy_ram as usize * TILEMAP_PX_WIDTH + (memory_bus.ppu_memory.scx_ram as usize + x) % TILEMAP_PX_WIDTH] = 0x00FF0000;
+			self.tilemap_buf[((memory_bus.ppu_memory.scy_ram as usize + VIEWPORT_PX_HEIGHT - 1) % TILEMAP_PX_HEIGHT) * TILEMAP_PX_WIDTH + (memory_bus.ppu_memory.scx_ram as usize + x) % TILEMAP_PX_WIDTH] = 0x00FF0000;
+		}
+		for y in 0..VIEWPORT_PX_HEIGHT {
+			self.tilemap_buf[((memory_bus.ppu_memory.scy_ram as usize + y) % TILEMAP_PX_HEIGHT) * TILEMAP_PX_WIDTH + memory_bus.ppu_memory.scx_ram as usize] = 0x00FF0000;
+			self.tilemap_buf[((memory_bus.ppu_memory.scy_ram as usize + y) % TILEMAP_PX_HEIGHT) * TILEMAP_PX_WIDTH + (memory_bus.ppu_memory.scx_ram as usize + VIEWPORT_PX_WIDTH) % TILEMAP_PX_WIDTH - 1] = 0x00FF0000;
+		}
+		self.tilemap_viewer
+			.update_with_buffer(&self.tilemap_buf, TILEMAP_PX_WIDTH, TILEMAP_PX_HEIGHT)
+			.unwrap();
 	}
 	pub fn update(&mut self, memory_bus: &mut MemoryBus) {
+		self.update_tilemap_buf(memory_bus);
+		self.update_viewport(memory_bus);
 		if self.tileset_viewer.is_open() && !self.tileset_viewer.is_key_down(Key::Escape) {
 			self.update_tileset_win(memory_bus);
 		}
-		self.update_tilemap_buf(memory_bus);
-		self.update_viewport(memory_bus);
 		if self.tilemap_viewer.is_open() && !self.tilemap_viewer.is_key_down(Key::Escape) {
 			self.update_tilemap_win(memory_bus);
+		}
+	}
+	pub fn tick(&mut self, memory_bus: &mut MemoryBus) {
+		//self.update_tilemap_buf(memory_bus);
+		if memory_bus.ppu_memory.lcd_enable {
+			//do_op()
+			self.tick_ppu_mode(memory_bus);
 		}
 	}
 }
@@ -153,7 +206,16 @@ mod tests {
     use crate::memory_bus::MemoryBus;
 
     use super::*;
-
+	#[test]
+	fn test_ppu_mode() {
+		let mut memory_bus = MemoryBus::new();
+		let mut ppu = Ppu::new();
+		memory_bus.ppu_memory.lcd_enable = true;
+		for _i in 0..70224 {
+			ppu.tick(&mut memory_bus);
+			println!("{:?}", ppu.ppu_mode);
+		}
+	}
 	#[test]
 	fn test_tileset_fill() {
 		let mut memory_bus = MemoryBus::new();
@@ -195,14 +257,14 @@ mod tests {
 	fn test_tileset_generation() {
 		let mut memory_bus = MemoryBus::new();
 		let mut ppu = Ppu::new();
-		memory_bus.ppu_memory.write(0x190, 0x3c);
-		memory_bus.ppu_memory.write(0x192, 0x42);
-		memory_bus.ppu_memory.write(0x194, 0xb9);
-		memory_bus.ppu_memory.write(0x196, 0xa5);
-		memory_bus.ppu_memory.write(0x198, 0xb9);
-		memory_bus.ppu_memory.write(0x19a, 0xa5);
-		memory_bus.ppu_memory.write(0x19c, 0x42);
-		memory_bus.ppu_memory.write(0x19e, 0x3c);
+		memory_bus.ppu_memory.write(0x8190, 0x3c);
+		memory_bus.ppu_memory.write(0x8192, 0x42);
+		memory_bus.ppu_memory.write(0x8194, 0xb9);
+		memory_bus.ppu_memory.write(0x8196, 0xa5);
+		memory_bus.ppu_memory.write(0x8198, 0xb9);
+		memory_bus.ppu_memory.write(0x819a, 0xa5);
+		memory_bus.ppu_memory.write(0x819c, 0x42);
+		memory_bus.ppu_memory.write(0x819e, 0x3c);
 		loop {
 			ppu.update(&mut memory_bus);						// Should display an ® logo in tile {1; 9}
 		}

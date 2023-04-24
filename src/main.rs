@@ -17,7 +17,7 @@ fn main() {
 	thread::sleep(time::Duration::from_millis(500));		// or first minifb update will fail
 	cpu.tick(&mut memory_bus);									// "Virtual" tick to realise first PC pointee byte fetch; no operation is executed
 	ppu.update(&mut memory_bus);
-	while cpu.registers.program_counter - 1 != 0xEF {			// When the op at PC is about to be executed, PC is now PC+1
+	while cpu.registers.program_counter - 1 != 0xF1 {			// When the op at PC is about to be executed, PC is now PC+1
 		//println!("CPU state {:x?}", cpu);
 		cpu.tick(&mut memory_bus);
 		//thread::sleep(time::Duration::from_millis(1000));
