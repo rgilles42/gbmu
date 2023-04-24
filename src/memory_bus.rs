@@ -8,12 +8,12 @@ pub struct MemoryBus {
 	pub bootrom: [u8; 0x100],			// 0x0000 - 0x00FF
 	pub rom_bank0: [u8; 0x4000],		// 0x0000 - 0x3FFF
 	pub rom_bank1: [u8; 0x4000],		// 0x4000 - 0x7FFF
-//	pub video_ram: [u8; 0x2000],		// 0x8000 - 0x9FFF => Inside PPUMemory
+/* pub video_ram: [u8; 0x2000]		*/	// 0x8000 - 0x9FFF => Inside PPUMemory
 	pub cartr_ram: [u8; 0x2000],		// 0xA000 - 0xBFFF
 	pub intern_ram: [u8; 0x2000],		// 0xC000 - 0xDFFF
-/* echo of intern_ram: [u8; 0x1E00] */	// 0xE000 - 0xFDFF
-//	oam: [u8; 0x00A0],					// 0xFE00 - 0xFE9F => Inside PPUMemory
-/* unmapped memory: [u8; 0x0060] */		// 0xFEA0 - 0xFEFF
+/* echo of intern_ram: [u8; 0x1E00]	*/	// 0xE000 - 0xFDFF => Inside intern_ram
+/* oam: [u8; 0x00A0]				*/	// 0xFE00 - 0xFE9F => Inside PPUMemory
+/* unmapped memory: [u8; 0x0060]	*/	// 0xFEA0 - 0xFEFF => Read returns 0, write does nothing
 	pub io_regis: [u8; 0x0080],			// 0xFF00 - 0xFF7F
 	pub high_intern_ram: [u8; 0x007F],	// 0xFF80 - 0xFFFE
 	pub interrupt_enable: u8			// 0xFFFF

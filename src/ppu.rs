@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-
 use minifb::{Key, Window, WindowOptions};
 use crate::memory_bus::MemoryBus;
 use crate::memory_bus::ppu_memory::{TilePixel, PixelColour};
@@ -188,27 +187,32 @@ impl Ppu {
 			.update_with_buffer(&self.tilemap_buf, TILEMAP_PX_WIDTH, TILEMAP_PX_HEIGHT)
 			.unwrap();
 	}
+	fn update_windows(&mut self, memory_bus: &mut MemoryBus) {
+		self.viewport
+			.update_with_buffer(&self.viewport_buffer, VIEWPORT_PX_WIDTH, VIEWPORT_PX_HEIGHT)
+			.unwrap();
+		if let Some(_) = self.tilemap_viewer {
+			if self.tilemap_viewer.as_mut().unwrap().is_open() && !self.tilemap_viewer.as_mut().unwrap().is_key_down(Key::Escape) {
+				self.update_tilemap_win(memory_bus);
+			}
+		}
+		if let Some(_) = self.tileset_viewer {
+			if self.tileset_viewer.as_mut().unwrap().is_open() && !self.tileset_viewer.as_mut().unwrap().is_key_down(Key::Escape) {
+				self.update_tileset_win(memory_bus);
+			}
+		}
+	}
 	pub fn tick(&mut self, memory_bus: &mut MemoryBus) {
 		if memory_bus.ppu_memory.lcd_enable {
 			self.tick_viewport(memory_bus);
 			if let PPUModes::VBlank(153, 4559) = self.ppu_mode  {
-				self.viewport
-				.update_with_buffer(&self.viewport_buffer, VIEWPORT_PX_WIDTH, VIEWPORT_PX_HEIGHT)
-				.unwrap();
-				if let Some(_) = self.tilemap_viewer {
-					if self.tilemap_viewer.as_mut().unwrap().is_open() && !self.tilemap_viewer.as_mut().unwrap().is_key_down(Key::Escape) {
-						self.update_tilemap_win(memory_bus);
-					}
-				}
-				if let Some(_) = self.tileset_viewer {
-					if self.tileset_viewer.as_mut().unwrap().is_open() && !self.tileset_viewer.as_mut().unwrap().is_key_down(Key::Escape) {
-						self.update_tileset_win(memory_bus);
-					}
-				}
+				self.update_windows(memory_bus);
 			}
 			self.tick_ppu_mode(memory_bus);
 		}
-		else {self.ppu_mode = PPUModes::OAMSearch(0, 0)}
+		else {
+			self.ppu_mode = PPUModes::OAMSearch(0, 0)
+		}
 	}
 }
 
