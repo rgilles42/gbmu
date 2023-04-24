@@ -5,24 +5,18 @@ mod ppu;
 use cpu::Cpu;
 use memory_bus::MemoryBus;
 use ppu::Ppu;
-use std::{thread, time};
 
 fn main() {
 	let mut memory_bus = MemoryBus::new();
-	//memory_bus.init();
 	memory_bus.load_dmg_bootrom();
 	memory_bus.debug_insert_cart_logo();
 	let mut cpu = Cpu::new();
-	let mut ppu = Ppu::new();
-	thread::sleep(time::Duration::from_millis(500));		// or first minifb update will fail
+	let mut ppu = Ppu::new(false, false);
 	cpu.tick(&mut memory_bus);									// "Virtual" tick to realise first PC pointee byte fetch; no operation is executed
-	ppu.update(&mut memory_bus);
 	while cpu.registers.program_counter - 1 != 0xF1 {			// When the op at PC is about to be executed, PC is now PC+1
-		//println!("CPU state {:x?}", cpu);
-		cpu.tick(&mut memory_bus);
-		//thread::sleep(time::Duration::from_millis(1000));
-	}
-	loop {
-		ppu.update(&mut memory_bus);
+		let nb_cycles = cpu.tick(&mut memory_bus);
+		for _ in 0..nb_cycles {
+			ppu.tick(&mut memory_bus);
+		}
 	}
 }

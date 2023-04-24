@@ -39,22 +39,22 @@ pub struct Ppu {
 	ppu_mode: PPUModes,
 	palette_translation: HashMap<PixelColour, u32>,
 
-	tileset_viewer: Window,
+	tileset_viewer: Option<Window>,
 	tileset_window_buf: Vec<u32>,
-	tilemap_viewer: Window,
+	tilemap_viewer: Option<Window>,
 	tilemap_buf: Vec<u32>,
 	viewport: Window,
 	viewport_buffer: Vec<u32>
 }
 
 impl Ppu {
-	pub fn new() -> Ppu {
+	pub fn new(with_tileset: bool, with_tilemap: bool) -> Ppu {
 		let ppu = Ppu {
 			ppu_mode: PPUModes::OAMSearch(0, 0),
 			palette_translation: HashMap::from([(PixelColour::White, 0x00FFFFFF), (PixelColour::LightGray, 0x00A9A9A9), (PixelColour::DarkGray, 0x00545454), (PixelColour::Black, 0x00000000)]),
-			tileset_viewer: Window::new("Tileset", TILESET_VIEWER_PX_WIDTH, TILESET_VIEWER_PX_HEIGHT, WindowOptions {scale: minifb::Scale::X4,..WindowOptions::default()}).unwrap(),
+			tileset_viewer: if with_tileset {Some(Window::new("Tileset", TILESET_VIEWER_PX_WIDTH, TILESET_VIEWER_PX_HEIGHT, WindowOptions {scale: minifb::Scale::X4,..WindowOptions::default()}).unwrap())} else {None},
 			tileset_window_buf: vec![0; TILESET_VIEWER_PX_SIZE],
-			tilemap_viewer: Window::new("Tilemap", TILEMAP_PX_WIDTH, TILEMAP_PX_HEIGHT, WindowOptions {scale: minifb::Scale::X4,..WindowOptions::default()}).unwrap(),
+			tilemap_viewer: if with_tilemap {Some(Window::new("Tilemap", TILEMAP_PX_WIDTH, TILEMAP_PX_HEIGHT, WindowOptions {scale: minifb::Scale::X4,..WindowOptions::default()}).unwrap())} else {None},
 			tilemap_buf: vec![0; TILEMAP_PX_SIZE],
 			viewport: Window::new("GBMU", VIEWPORT_PX_WIDTH, VIEWPORT_PX_HEIGHT, WindowOptions {scale: minifb::Scale::X4,..WindowOptions::default()}).unwrap(),
 			viewport_buffer: vec![0; VIEWPORT_PX_SIZE]
@@ -98,30 +98,33 @@ impl Ppu {
 				},
 		}
 	}
-	fn update_viewport(&mut self, memory_bus: &mut MemoryBus) {
-		for y in 0..VIEWPORT_PX_HEIGHT {
-			if !memory_bus.ppu_memory.lcd_enable {break};
-			memory_bus.ppu_memory.ly_ram = y as u8;
-			for x in 0..VIEWPORT_PX_WIDTH {
-				if memory_bus.ppu_memory.bg_win_enable {
-					let tile_index = memory_bus.ppu_memory.get_bg_tile_index(memory_bus.ppu_memory.scx_ram.overflowing_add(x as u8).0 / 8, memory_bus.ppu_memory.scy_ram.overflowing_add(y as u8).0 / 8);
-					let tile = memory_bus.ppu_memory.get_bg_win_tile(tile_index);
-					let pixel = tile[(memory_bus.ppu_memory.scy_ram as usize + y) % 8][(memory_bus.ppu_memory.scx_ram as usize + x) % 8];
-					self.viewport_buffer[y * VIEWPORT_PX_WIDTH + x] = match pixel {
-						TilePixel::Zero => self.palette_translation[&memory_bus.ppu_memory.background_palette[0]],
-						TilePixel::One => self.palette_translation[&memory_bus.ppu_memory.background_palette[1]],
-						TilePixel::Two => self.palette_translation[&memory_bus.ppu_memory.background_palette[2]],
-						TilePixel::Three => self.palette_translation[&memory_bus.ppu_memory.background_palette[3]],
-					};
-				} else {
-					self.viewport_buffer[y * VIEWPORT_PX_WIDTH + x] = self.palette_translation[&PixelColour::White];
+	fn tick_viewport(&mut self, memory_bus: &mut MemoryBus) {
+		match self.ppu_mode {
+			PPUModes::OAMSearch(line, _) => {
+				memory_bus.ppu_memory.ly_ram = line;
+			},
+			PPUModes::LineDraw(line, count) => {
+				if count < VIEWPORT_PX_WIDTH {
+					if memory_bus.ppu_memory.bg_win_enable {
+						let tile_index = memory_bus.ppu_memory.get_bg_tile_index(memory_bus.ppu_memory.scx_ram.overflowing_add(count as u8).0 / 8, memory_bus.ppu_memory.scy_ram.overflowing_add(line).0 / 8);
+						let tile = memory_bus.ppu_memory.get_bg_win_tile(tile_index);
+						let pixel = tile[(memory_bus.ppu_memory.scy_ram as usize + line as usize) % 8][(memory_bus.ppu_memory.scx_ram as usize + count) % 8];
+						self.viewport_buffer[(line as usize) * VIEWPORT_PX_WIDTH + count] = match pixel {
+							TilePixel::Zero => self.palette_translation[&memory_bus.ppu_memory.background_palette[0]],
+							TilePixel::One => self.palette_translation[&memory_bus.ppu_memory.background_palette[1]],
+							TilePixel::Two => self.palette_translation[&memory_bus.ppu_memory.background_palette[2]],
+							TilePixel::Three => self.palette_translation[&memory_bus.ppu_memory.background_palette[3]],
+						};
+					} else {
+						self.viewport_buffer[(line as usize) * VIEWPORT_PX_WIDTH + count] = self.palette_translation[&PixelColour::White];
+					}
 				}
-			}
-		}
-		memory_bus.ppu_memory.ly_ram = VIEWPORT_PX_HEIGHT as u8;
-		self.viewport
-			.update_with_buffer(&self.viewport_buffer, VIEWPORT_PX_WIDTH, VIEWPORT_PX_HEIGHT)
-			.unwrap();
+			},
+			PPUModes::HBlank(_, _) => {},
+			PPUModes::VBlank(line, _) => {
+				memory_bus.ppu_memory.ly_ram = line;
+			},
+}
 	}
 	fn update_tileset_win(&mut self, memory_bus: &mut MemoryBus) {
 		for (id_bank, bank) in memory_bus.ppu_memory.tiles.iter().enumerate() {
@@ -146,7 +149,7 @@ impl Ppu {
 					}
 				}
 			}
-			self.tileset_viewer
+			self.tileset_viewer.as_mut().unwrap()
 				.update_with_buffer(&self.tileset_window_buf, TILESET_VIEWER_PX_WIDTH, TILESET_VIEWER_PX_HEIGHT)
 				.unwrap();
 		}
@@ -181,24 +184,31 @@ impl Ppu {
 			self.tilemap_buf[((memory_bus.ppu_memory.scy_ram as usize + y) % TILEMAP_PX_HEIGHT) * TILEMAP_PX_WIDTH + memory_bus.ppu_memory.scx_ram as usize] = 0x00FF0000;
 			self.tilemap_buf[((memory_bus.ppu_memory.scy_ram as usize + y) % TILEMAP_PX_HEIGHT) * TILEMAP_PX_WIDTH + (memory_bus.ppu_memory.scx_ram as usize + VIEWPORT_PX_WIDTH) % TILEMAP_PX_WIDTH - 1] = 0x00FF0000;
 		}
-		self.tilemap_viewer
+		self.tilemap_viewer.as_mut().unwrap()
 			.update_with_buffer(&self.tilemap_buf, TILEMAP_PX_WIDTH, TILEMAP_PX_HEIGHT)
 			.unwrap();
 	}
-	pub fn update(&mut self, memory_bus: &mut MemoryBus) {
-		self.update_viewport(memory_bus);
-		if self.tileset_viewer.is_open() && !self.tileset_viewer.is_key_down(Key::Escape) {
-			self.update_tileset_win(memory_bus);
-		}
-		if self.tilemap_viewer.is_open() && !self.tilemap_viewer.is_key_down(Key::Escape) {
-			self.update_tilemap_win(memory_bus);
-		}
-	}
 	pub fn tick(&mut self, memory_bus: &mut MemoryBus) {
 		if memory_bus.ppu_memory.lcd_enable {
-			//tick_viewfinder();
+			self.tick_viewport(memory_bus);
+			if let PPUModes::VBlank(153, 4559) = self.ppu_mode  {
+				self.viewport
+				.update_with_buffer(&self.viewport_buffer, VIEWPORT_PX_WIDTH, VIEWPORT_PX_HEIGHT)
+				.unwrap();
+				if let Some(_) = self.tilemap_viewer {
+					if self.tilemap_viewer.as_mut().unwrap().is_open() && !self.tilemap_viewer.as_mut().unwrap().is_key_down(Key::Escape) {
+						self.update_tilemap_win(memory_bus);
+					}
+				}
+				if let Some(_) = self.tileset_viewer {
+					if self.tileset_viewer.as_mut().unwrap().is_open() && !self.tileset_viewer.as_mut().unwrap().is_key_down(Key::Escape) {
+						self.update_tileset_win(memory_bus);
+					}
+				}
+			}
 			self.tick_ppu_mode(memory_bus);
 		}
+		else {self.ppu_mode = PPUModes::OAMSearch(0, 0)}
 	}
 }
 
@@ -210,19 +220,24 @@ mod tests {
 	#[test]
 	fn test_ppu_mode() {
 		let mut memory_bus = MemoryBus::new();
-		let mut ppu = Ppu::new();
+		let mut ppu = Ppu::new(false, false);
 		memory_bus.ppu_memory.lcd_enable = true;
-		for _i in 0..70224 {
+		std::thread::sleep(std::time::Duration::from_millis(500));					// or first minifb update will fail
+		for _ in 0..70224 {
 			ppu.tick(&mut memory_bus);
-			println!("{:?}", ppu.ppu_mode);
+			//println!("{:?}", ppu.ppu_mode);
+		}
+		loop {
 		}
 	}
 	#[test]
 	fn test_tileset_fill() {
 		let mut memory_bus = MemoryBus::new();
-		let mut ppu = Ppu::new();
+		let mut ppu = Ppu::new(true, false);
 		std::thread::sleep(std::time::Duration::from_millis(500));					// or first minifb update will fail
-		ppu.update(&mut memory_bus);
+		for _i in 0..70224 {
+			ppu.tick(&mut memory_bus);
+		}
 		std::thread::sleep(std::time::Duration::from_millis(1000));
 		for i in 0..0x6000 {
 			let tiles_bank =	(i / TILE_WIDTH / TILE_HEIGHT / TILESET_NB_TILES_HEIGHT / TILESET_NB_TILES_WIDTH ) % TILESETS_NB;
@@ -235,13 +250,13 @@ mod tests {
 				2 => TilePixel::Three,
 				_ => TilePixel::Zero
 			};
-			ppu.update(&mut memory_bus);
+			ppu.update_tileset_win(&mut memory_bus);
 		}
 	}
 	#[test]
 	fn test_tileset_direct() {
 		let mut memory_bus = MemoryBus::new();
-		let mut ppu = Ppu::new();
+		let mut ppu = Ppu::new(true, false);
 		memory_bus.ppu_memory.tiles[0][0x19][0] = [TilePixel::Zero, TilePixel::Zero, TilePixel::One, TilePixel::One, TilePixel::One, TilePixel::One, TilePixel::Zero, TilePixel::Zero];
 		memory_bus.ppu_memory.tiles[0][0x19][1] = [TilePixel::Zero, TilePixel::One, TilePixel::Zero, TilePixel::Zero, TilePixel::Zero, TilePixel::Zero, TilePixel::One, TilePixel::Zero];
 		memory_bus.ppu_memory.tiles[0][0x19][2] = [TilePixel::One, TilePixel::Zero, TilePixel::One, TilePixel::One, TilePixel::One, TilePixel::Zero, TilePixel::Zero, TilePixel::One];
@@ -251,13 +266,13 @@ mod tests {
 		memory_bus.ppu_memory.tiles[0][0x19][6] = [TilePixel::Zero, TilePixel::One, TilePixel::Zero, TilePixel::Zero, TilePixel::Zero, TilePixel::Zero, TilePixel::One, TilePixel::Zero];
 		memory_bus.ppu_memory.tiles[0][0x19][7] = [TilePixel::Zero, TilePixel::Zero, TilePixel::One, TilePixel::One, TilePixel::One, TilePixel::One, TilePixel::Zero, TilePixel::Zero];
 		loop {
-			ppu.update(&mut memory_bus);						// Should display an ® logo in tile {1; 9}
+			ppu.update_tileset_win(&mut memory_bus);						// Should display an ® logo in tile {1; 9}
 		}
 	}
 	#[test]
 	fn test_tileset_generation() {
 		let mut memory_bus = MemoryBus::new();
-		let mut ppu = Ppu::new();
+		let mut ppu = Ppu::new(true, false);
 		memory_bus.ppu_memory.write(0x8190, 0x3c);
 		memory_bus.ppu_memory.write(0x8192, 0x42);
 		memory_bus.ppu_memory.write(0x8194, 0xb9);
@@ -267,13 +282,13 @@ mod tests {
 		memory_bus.ppu_memory.write(0x819c, 0x42);
 		memory_bus.ppu_memory.write(0x819e, 0x3c);
 		loop {
-			ppu.update(&mut memory_bus);						// Should display an ® logo in tile {1; 9}
+			ppu.update_tileset_win(&mut memory_bus);						// Should display an ® logo in tile {1; 9}
 		}
 	}
 	#[test]
 	fn test_tilemap_and_viewport_composition() {
 		let mut memory_bus = MemoryBus::new();
-		let mut ppu = Ppu::new();
+		let mut ppu = Ppu::new(false, true);
 		let mut cpu = crate::Cpu::new();
 		memory_bus.load_dmg_bootrom();
 		memory_bus.debug_insert_cart_logo();
@@ -319,7 +334,9 @@ mod tests {
 			[0x19, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x19],
 		];
 		loop {
-			ppu.update(&mut memory_bus);
+			for _i in 0..70224 {
+				ppu.tick(&mut memory_bus);
+			}
 			memory_bus.write_byte(0xFF42, memory_bus.read_byte(0xFF42).overflowing_add(1).0);
 			memory_bus.write_byte(0xFF43, memory_bus.read_byte(0xFF43).overflowing_add(1).0);
 		}

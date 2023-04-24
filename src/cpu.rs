@@ -34,10 +34,11 @@ impl Cpu {
 		// cpu.registers.init();
 		cpu
 	}
-	pub fn tick(&mut self, memory_bus: &mut MemoryBus) {
+	pub fn tick(&mut self, memory_bus: &mut MemoryBus) -> u8 {
 		self.current_op = self.next_op;								// Account for Sharp SM83 fetch/execute overlap
 		self.exec_current_op(memory_bus);
 		self.fetch_next_opcode(memory_bus);							// Account for Sharp SM83 fetch/execute overlap
+		self.get_nb_clock_current_op()
 	}
 	fn fetch_next_opcode(&mut self, memory_bus: &MemoryBus) {
 		self.next_op = Instruction::from_opcode(self.fetch_pc(memory_bus), self, memory_bus);
