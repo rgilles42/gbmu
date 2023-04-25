@@ -223,7 +223,7 @@ mod tests {
     use super::*;
 	#[test]
 	fn test_ppu_mode() {
-		let mut memory_bus = MemoryBus::new();
+		let mut memory_bus = MemoryBus::new(None);
 		let mut ppu = Ppu::new(false, false);
 		memory_bus.ppu_memory.lcd_enable = true;
 		std::thread::sleep(std::time::Duration::from_millis(500));					// or first minifb update will fail
@@ -236,7 +236,7 @@ mod tests {
 	}
 	#[test]
 	fn test_tileset_fill() {
-		let mut memory_bus = MemoryBus::new();
+		let mut memory_bus = MemoryBus::new(None);
 		let mut ppu = Ppu::new(true, false);
 		std::thread::sleep(std::time::Duration::from_millis(500));					// or first minifb update will fail
 		for _i in 0..70224 {
@@ -259,7 +259,7 @@ mod tests {
 	}
 	#[test]
 	fn test_tileset_direct() {
-		let mut memory_bus = MemoryBus::new();
+		let mut memory_bus = MemoryBus::new(None);
 		let mut ppu = Ppu::new(true, false);
 		memory_bus.ppu_memory.tiles[0][0x19][0] = [TilePixel::Zero, TilePixel::Zero, TilePixel::One, TilePixel::One, TilePixel::One, TilePixel::One, TilePixel::Zero, TilePixel::Zero];
 		memory_bus.ppu_memory.tiles[0][0x19][1] = [TilePixel::Zero, TilePixel::One, TilePixel::Zero, TilePixel::Zero, TilePixel::Zero, TilePixel::Zero, TilePixel::One, TilePixel::Zero];
@@ -275,7 +275,7 @@ mod tests {
 	}
 	#[test]
 	fn test_tileset_generation() {
-		let mut memory_bus = MemoryBus::new();
+		let mut memory_bus = MemoryBus::new(None);
 		let mut ppu = Ppu::new(true, false);
 		memory_bus.ppu_memory.write(0x8190, 0x3c);
 		memory_bus.ppu_memory.write(0x8192, 0x42);
@@ -291,11 +291,11 @@ mod tests {
 	}
 	#[test]
 	fn test_tilemap_and_viewport_composition() {
-		let mut memory_bus = MemoryBus::new();
+		let mut memory_bus = MemoryBus::new(None);
 		let mut ppu = Ppu::new(false, true);
 		let mut cpu = crate::Cpu::new();
 		memory_bus.load_dmg_bootrom();
-		memory_bus.debug_insert_cart_logo();
+		memory_bus.cartridge.debug_insert_cart_logo();
 		cpu.tick(&mut memory_bus);
 		while cpu.registers.program_counter - 1 != 0x55 {
 			cpu.tick(&mut memory_bus);

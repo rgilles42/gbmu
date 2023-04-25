@@ -984,7 +984,7 @@ mod tests {
 	}
 	#[test]
 	fn test_arith() {
-		let mut memory_bus = MemoryBus::new();
+		let mut memory_bus = MemoryBus::new(None);
 		let mut my_cpu = Cpu::new();
 		test_adds(&mut my_cpu, &mut memory_bus, 0x12, 0x24, 0x00.into());
 		test_adds(&mut my_cpu, &mut memory_bus, 0x80, 0x00, FlagsRegister{ zero: true, substract: false, half_carry: false, carry: true });

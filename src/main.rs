@@ -7,9 +7,9 @@ use memory_bus::MemoryBus;
 use ppu::Ppu;
 
 fn main() {
-	let mut memory_bus = MemoryBus::new();
+	let mut memory_bus = MemoryBus::new(Some("/home/rgilles/Desktop/roms/Tetris.gb"));
 	memory_bus.load_dmg_bootrom();
-	memory_bus.debug_insert_cart_logo();
+	//memory_bus.cartridge.debug_insert_cart_logo();
 	let mut cpu = Cpu::new();
 	let mut ppu = Ppu::new(false, false);
 	cpu.tick(&mut memory_bus);									// "Virtual" tick to realise first PC pointee byte fetch; no operation is executed
