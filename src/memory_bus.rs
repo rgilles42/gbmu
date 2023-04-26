@@ -1,11 +1,14 @@
 pub mod ppu_memory;
+pub mod timer_memory;
 mod cartridge;
-use self::{ppu_memory::PPUMemory, cartridge::Cartridge};
+
+use self::{ppu_memory::PPUMemory, cartridge::Cartridge, timer_memory::TimerMemory};
 use std::fmt::Debug;
 
 pub struct MemoryBus {
-	pub cartridge: Cartridge,
 	pub ppu_memory: PPUMemory,
+	pub timer_memory: TimerMemory,		// 0xFF04 - 0xFF07
+	pub cartridge: Cartridge,
 	pub bootrom: [u8; 0x100],			// 0x0000 - 0x00FF
 	/* pub rom_bank0: [u8; 0x4000],		*/	// 0x0000 - 0x3FFF => Inside Cartridge
 	/* pub rom_bank1: [u8; 0x4000],		*/	// 0x4000 - 0x7FFF => Inside Cartridge
@@ -25,6 +28,7 @@ impl MemoryBus {
 	pub fn new(rom_path: Option<&str>) -> Self {
 		MemoryBus {
 			ppu_memory: PPUMemory::new(),
+			timer_memory: TimerMemory::new(),
 			cartridge: Cartridge::new(rom_path),
 			bootrom: [0; 0x100],
 			intern_ram: [0; 0x2000],
@@ -101,6 +105,7 @@ impl MemoryBus {
 			0xE000..=0xFDFF	=>		  self.intern_ram[(address - 0xE000) as usize],
 			0xFE00..=0xFE9F	=>		  self.ppu_memory.read(address as usize),
 			0xFEA0..=0xFEFF	=> 0,
+			0xFF04..=0xFF07 =>		self.timer_memory.read(address as usize),
 			0xFF40 | 0xFF47 =>		  self.ppu_memory.read(address as usize),
 			0xFF42			=>		  self.ppu_memory.scy_ram,
 			0xFF43			=>		  self.ppu_memory.scx_ram,
@@ -122,6 +127,7 @@ impl MemoryBus {
 			0xE000..=0xFDFF	=>		  {self.intern_ram[(address - 0xE000) as usize] = data},
 			0xFE00..=0xFE9F	=>		   self.ppu_memory.write(address as usize, data),
 			0xFEA0..=0xFEFF	=> {},
+			0xFF04..=0xFF07 =>		{self.timer_memory.write(address as usize, data)},
 			0xFF40 | 0xFF47 =>		   self.ppu_memory.write(address as usize, data),
 			0xFF42			=>		  {self.ppu_memory.scy_ram = data},
 			0xFF43			=>		  {self.ppu_memory.scx_ram = data},
