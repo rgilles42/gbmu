@@ -4,32 +4,32 @@ use self::{ppu_memory::PPUMemory, cartridge::Cartridge};
 use std::fmt::Debug;
 
 pub struct MemoryBus {
-	pub is_bootrom_mapped: bool,
 	pub cartridge: Cartridge,
 	pub ppu_memory: PPUMemory,
 	pub bootrom: [u8; 0x100],			// 0x0000 - 0x00FF
-/* pub rom_bank0: [u8; 0x4000],		*/	// 0x0000 - 0x3FFF => Inside Cartridge
-/* pub rom_bank1: [u8; 0x4000],		*/	// 0x4000 - 0x7FFF => Inside Cartridge
-/* pub video_ram: [u8; 0x2000]		*/	// 0x8000 - 0x9FFF => Inside PPUMemory
-/* pub cartr_ram: [u8; 0x2000],		*/	// 0xA000 - 0xBFFF => Inside Cartridge
-	pub intern_ram: [u8; 0x2000],		// 0xC000 - 0xDFFF
-/* echo of intern_ram: [u8; 0x1E00]	*/	// 0xE000 - 0xFDFF => Inside intern_ram
-/* oam: [u8; 0x00A0]				*/	// 0xFE00 - 0xFE9F => Inside PPUMemory
-/* unmapped memory: [u8; 0x0060]	*/	// 0xFEA0 - 0xFEFF => Read returns 0, write does nothing
-	pub io_regis: [u8; 0x0080],			// 0xFF00 - 0xFF7F
-	pub high_intern_ram: [u8; 0x007F],	// 0xFF80 - 0xFFFE
-	pub interrupt_enable: u8			// 0xFFFF
+	/* pub rom_bank0: [u8; 0x4000],		*/	// 0x0000 - 0x3FFF => Inside Cartridge
+	/* pub rom_bank1: [u8; 0x4000],		*/	// 0x4000 - 0x7FFF => Inside Cartridge
+	/* pub video_ram: [u8; 0x2000]		*/	// 0x8000 - 0x9FFF => Inside PPUMemory
+	/* pub cartr_ram: [u8; 0x2000],		*/	// 0xA000 - 0xBFFF => Inside Cartridge
+	pub intern_ram: [u8; 0x2000],			// 0xC000 - 0xDFFF
+	/* echo of intern_ram: [u8; 0x1E00]	*/	// 0xE000 - 0xFDFF => Inside intern_ram
+	/* oam: [u8; 0x00A0]				*/	// 0xFE00 - 0xFE9F => Inside PPUMemory
+	/* unmapped memory: [u8; 0x0060]	*/	// 0xFEA0 - 0xFEFF => Read returns 0, write does nothing
+	pub io_regis: [u8; 0x0080],				// 0xFF00 - 0xFF7F
+	bootrom_reg: u8,						// 0xFF50
+	pub high_intern_ram: [u8; 0x007F],		// 0xFF80 - 0xFFFE
+	pub interrupt_enable: u8				// 0xFFFF
 }
 
 impl MemoryBus {
 	pub fn new(rom_path: Option<&str>) -> Self {
 		MemoryBus {
-			is_bootrom_mapped: false,
 			ppu_memory: PPUMemory::new(),
 			cartridge: Cartridge::new(rom_path),
 			bootrom: [0; 0x100],
 			intern_ram: [0; 0x2000],
 			io_regis: [0; 0x0080],
+			bootrom_reg: 0x01,
 			high_intern_ram: [0; 0x007F],
 			interrupt_enable: 0
 		}
@@ -54,7 +54,7 @@ impl MemoryBus {
 			0xF5, 0x06, 0x19, 0x78, 0x86, 0x23, 0x05, 0x20, 0xFB, 0x86, 0x20, 0xFE, 0x3E, 0x01, 0xE0, 0x50
 		];
 		self.bootrom.clone_from_slice(&dmg_bootrom);
-		self.is_bootrom_mapped = true;
+		self.bootrom_reg = 0x00;
 	}
 	// pub fn init(&mut self) {
 	// 	self.write_byte(0xFF05, 0x00);
@@ -91,7 +91,7 @@ impl MemoryBus {
 	// }
 	pub fn read_byte(&self, address: u16) -> u8 {
 		match address {
-			0x0000..=0x00FF	=> if self.is_bootrom_mapped
+			0x0000..=0x00FF	=> if self.bootrom_reg == 0x00
 									 {self.bootrom[(address - 0x0000) as usize]}
 							else     {self.cartridge.read(address as usize)},
 			0x0100..=0x7FFF	=>		  self.cartridge.read(address as usize),
@@ -105,6 +105,7 @@ impl MemoryBus {
 			0xFF42			=>		  self.ppu_memory.scy_ram,
 			0xFF43			=>		  self.ppu_memory.scx_ram,
 			0xFF44			=>		  self.ppu_memory.ly_ram,
+			0xFF50			=>		  self.bootrom_reg,
 			0xFF00..=0xFF7F	=>		  self.io_regis[(address - 0xFF00) as usize],
 			0xFF80..=0xFFFE	=> self.high_intern_ram[(address - 0xFF80) as usize],
 			0xFFFF			=> self.interrupt_enable
@@ -112,7 +113,7 @@ impl MemoryBus {
 	}
 	pub fn write_byte(&mut self, address: u16, data: u8) {
 		match address {
-			0x0000..=0x00FF	=> if self.is_bootrom_mapped {}
+			0x0000..=0x00FF	=> if self.bootrom_reg == 0x00 {}
 							   else   {self.cartridge.write(address as usize, data)},
 			0x0100..=0x7FFF	=>		  {self.cartridge.write(address as usize, data)},
 			0x8000..=0x9FFF	=>		   self.ppu_memory.write(address as usize, data),
@@ -125,6 +126,7 @@ impl MemoryBus {
 			0xFF42			=>		  {self.ppu_memory.scy_ram = data},
 			0xFF43			=>		  {self.ppu_memory.scx_ram = data},
 			0xFF44			=>		  {self.ppu_memory.ly_ram = data},
+			0xFF50			=>		  {self.bootrom_reg = data},
 			0xFF00..=0xFF7F	=>		  {self.io_regis[(address - 0xFF00) as usize] = data},
 			0xFF80..=0xFFFE	=> {self.high_intern_ram[(address - 0xFF80) as usize] = data},
 			0xFFFF			=> {self.interrupt_enable = data}
