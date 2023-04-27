@@ -78,6 +78,7 @@ pub enum Instruction {
 	JRf(InstrLength, InstrCycles, JumpCondition),
 	CALL(InstrLength, InstrCycles),
 	CALLf(InstrLength, InstrCycles, JumpCondition),
+	ISR(InstrLength, InstrCycles),
 	RET(InstrLength, InstrCycles),
 	RETf(InstrLength, InstrCycles, JumpCondition),
 	RETI(InstrLength, InstrCycles),
@@ -874,6 +875,22 @@ impl Cpu {
 					self.registers.stack_pointer = self.registers.stack_pointer.overflowing_sub(2).0;
 					self.registers.program_counter = address;
 				}
+			}
+			Instruction::ISR(_, _) => {
+				let interrupt_enable = memory_bus.read_byte(0xFFFF);
+				let interrupt_flag = memory_bus.read_byte(0xFF0F);
+				let effective_interrupts = interrupt_enable & interrupt_flag;
+				let address =
+					if effective_interrupts & (1 << 0) != 0			{memory_bus.write_byte(0xFF0F, interrupt_flag & !(1 << 0)); 0x0040}
+					else if effective_interrupts & (1 << 1) != 0	{memory_bus.write_byte(0xFF0F, interrupt_flag & !(1 << 1)); 0x0048}
+					else if effective_interrupts & (1 << 2) != 0	{memory_bus.write_byte(0xFF0F, interrupt_flag & !(1 << 2)); 0x0050}
+					else if effective_interrupts & (1 << 3) != 0	{memory_bus.write_byte(0xFF0F, interrupt_flag & !(1 << 3)); 0x0058}
+					else 											{memory_bus.write_byte(0xFF0F, interrupt_flag & !(1 << 4)); 0x0060};
+				memory_bus.write_byte(self.registers.stack_pointer.overflowing_sub(1).0, (self.registers.program_counter >> 8) as u8);
+				memory_bus.write_byte(self.registers.stack_pointer.overflowing_sub(2).0, self.registers.program_counter as u8);
+				self.registers.stack_pointer = self.registers.stack_pointer.overflowing_sub(2).0;
+				self.registers.program_counter = address;
+				self.ime_set = false;
 			}
 			Instruction::RET(_, _) => {
 				let mut ret_pc = 0x0000 as u16;

@@ -36,12 +36,21 @@ impl Cpu {
 	}
 	pub fn tick(&mut self, memory_bus: &mut MemoryBus) -> u8 {
 		self.current_op = self.next_op;								// Account for Sharp SM83 fetch/execute overlap
+		if self.ime_scheduled {
+			self.ime_set = true;
+			self.ime_scheduled = false;
+		}
 		self.exec_current_op(memory_bus);
 		self.fetch_next_opcode(memory_bus);							// Account for Sharp SM83 fetch/execute overlap
 		self.get_nb_clock_current_op()
 	}
 	fn fetch_next_opcode(&mut self, memory_bus: &MemoryBus) {
-		self.next_op = Instruction::from_opcode(self.fetch_pc(memory_bus), self, memory_bus);
+		if self.ime_set && memory_bus.read_byte(0xFFFF) & memory_bus.read_byte(0xFF0F) != 0 
+		{
+			self.next_op = Some(Instruction::ISR(0, 20));
+		} else {
+			self.next_op = Instruction::from_opcode(self.fetch_pc(memory_bus), self, memory_bus);
+		}
 	}
 	fn exec_current_op(&mut self, memory_bus: &mut MemoryBus) {
 		self.execute_op(memory_bus,
@@ -111,6 +120,7 @@ impl Cpu {
 			Instruction::JRf(_, nb_cycles, _) => nb_cycles,
 			Instruction::CALL(_, nb_cycles) => nb_cycles,
 			Instruction::CALLf(_, nb_cycles, _) => nb_cycles,
+			Instruction::ISR(_, nb_cycles) => nb_cycles,
 			Instruction::RET(_, nb_cycles) => nb_cycles,
 			Instruction::RETf(_, nb_cycles, _) => nb_cycles,
 			Instruction::RETI(_, nb_cycles) => nb_cycles,
