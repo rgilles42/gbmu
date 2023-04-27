@@ -24,6 +24,7 @@ pub struct PPUMemory {
 	pub scy_ram: u8,						// 0xFF42
 	pub scx_ram: u8,						// 0xFF43
 	pub ly_ram: u8,							// 0xFF44
+	pub lyc_ram: u8,						// 0xFF45
 	bgp_ram: u8,							// 0xFF47
 
 	pub tiles: [[Tile; 0x80]; 3],			// 0x8000 - 0x97FF
@@ -51,7 +52,8 @@ impl PPUMemory {
 			bgp_ram: 0,
 			scx_ram: 0,
 			scy_ram: 0,
-			ly_ram: 153,
+			ly_ram: 0,
+			lyc_ram: 0,
 			tiles: [ [[[TilePixel::Zero;8];8];0x80]; 3],
 			bg_tilemap0: [[0; 0x20]; 0x20],
 			bg_tilemap1: [[0; 0x20]; 0x20],
