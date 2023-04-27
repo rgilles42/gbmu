@@ -80,6 +80,7 @@ impl Ppu {
 			PPUModes::HBlank(line_index, count) =>
 				if count == 375 {
 					if line_index == 143 {
+						memory_bus.write_byte(0xFF0F, memory_bus.read_byte(0xFF0F) | (1 << 0));
 						PPUModes::VBlank(144, 0)
 					} else {
 						memory_bus.ppu_memory.is_oam_locked = true;

@@ -3,9 +3,9 @@ pub enum CPUFreqDivider {
 	Ratio0x10, Ratio0x40, Ratio0x100, Ratio0x400
 }
 pub struct TimerMemory {
-	div_reg: u8,	// 0xFF04
-	tima_reg: u8,	// 0xFF05
-	tim_reg: u8,	// 0xFF06
+	pub div_reg: u8,	// 0xFF04
+	pub tima_reg: u8,	// 0xFF05
+	pub tim_reg: u8,	// 0xFF06
 	tac_reg: u8,	// 0xFF07
 
 	pub timer_enabled: bool,
@@ -21,18 +21,6 @@ impl TimerMemory {
 			tac_reg: 0x00,
 			timer_enabled: false,
 			timer_freq_div: CPUFreqDivider::Ratio0x400
-		}
-	}
-	pub fn increase_div(&mut self) {
-		self.div_reg = self.div_reg.overflowing_add(1).0
-	}
-	pub fn increase_tima(&mut self) {
-		self.tima_reg = {
-			if self.tima_reg == 0xFF {
-				self.tim_reg
-			} else {
-				self.tima_reg + 1
-			}
 		}
 	}
 	pub fn read(&self, address: usize) -> u8 {
