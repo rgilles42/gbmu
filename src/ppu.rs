@@ -110,10 +110,10 @@ impl Ppu {
 						let tile = memory_bus.ppu_memory.get_bg_win_tile(tile_index);
 						let pixel = tile[(memory_bus.ppu_memory.scy_ram as usize + line as usize) % 8][(memory_bus.ppu_memory.scx_ram as usize + count) % 8];
 						self.viewport_buffer[(line as usize) * VIEWPORT_PX_WIDTH + count] = match pixel {
-							TilePixel::Zero => self.palette_translation[&memory_bus.ppu_memory.background_palette[0]],
-							TilePixel::One => self.palette_translation[&memory_bus.ppu_memory.background_palette[1]],
-							TilePixel::Two => self.palette_translation[&memory_bus.ppu_memory.background_palette[2]],
-							TilePixel::Three => self.palette_translation[&memory_bus.ppu_memory.background_palette[3]],
+							TilePixel::Zero => self.palette_translation[&memory_bus.ppu_memory.bg_palette[0]],
+							TilePixel::One => self.palette_translation[&memory_bus.ppu_memory.bg_palette[1]],
+							TilePixel::Two => self.palette_translation[&memory_bus.ppu_memory.bg_palette[2]],
+							TilePixel::Three => self.palette_translation[&memory_bus.ppu_memory.bg_palette[3]],
 						};
 					} else {
 						self.viewport_buffer[(line as usize) * VIEWPORT_PX_WIDTH + count] = self.palette_translation[&PixelColour::White];
@@ -167,10 +167,10 @@ impl Ppu {
 							x * TILE_WIDTH +
 							pixel_index
 						] =	match pixel {
-							TilePixel::Zero => self.palette_translation[&memory_bus.ppu_memory.background_palette[0]],
-							TilePixel::One => self.palette_translation[&memory_bus.ppu_memory.background_palette[1]],
-							TilePixel::Two => self.palette_translation[&memory_bus.ppu_memory.background_palette[2]],
-							TilePixel::Three => self.palette_translation[&memory_bus.ppu_memory.background_palette[3]],
+							TilePixel::Zero => self.palette_translation[&memory_bus.ppu_memory.bg_palette[0]],
+							TilePixel::One => self.palette_translation[&memory_bus.ppu_memory.bg_palette[1]],
+							TilePixel::Two => self.palette_translation[&memory_bus.ppu_memory.bg_palette[2]],
+							TilePixel::Three => self.palette_translation[&memory_bus.ppu_memory.bg_palette[3]],
 						}
 					}
 				}

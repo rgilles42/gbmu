@@ -14,6 +14,32 @@ pub enum PixelColour {
     DarkGray,
     Black,
 }
+
+#[derive(Copy, Clone)]
+pub struct OAMObject {
+	tile_id: u8,
+	pos_x: u8,
+	pos_y: u8,
+	is_using_obp1: bool,
+	is_x_flipped: bool,
+	is_y_flipped: bool,
+	is_under_bg_win: bool,
+}
+
+impl OAMObject {
+	fn new() -> Self {
+		OAMObject {
+			tile_id: 0xFF,
+			pos_x: 0xFF,
+			pos_y: 0xFF,
+			is_using_obp1: true,
+			is_x_flipped: true,
+			is_y_flipped: true,
+			is_under_bg_win: true 
+		}
+	}
+}
+
 pub struct PPUMemory {
 	pub is_vram_locked: bool,
 	pub is_oam_locked: bool,
@@ -26,19 +52,24 @@ pub struct PPUMemory {
 	pub ly_ram: u8,							// 0xFF44
 	pub lyc_ram: u8,						// 0xFF45
 	bgp_ram: u8,							// 0xFF47
+	obp_ram: [u8; 2],						// 0xFF48 - 0xFF49
+	pub wy_ram: u8,							// 0xFF4A
+	pub wx_ram: u8,							// 0xFF4B
 
 	pub tiles: [[Tile; 0x80]; 3],			// 0x8000 - 0x97FF
 	pub bg_tilemap0: [[u8; 0x20]; 0x20],	// 0x9800 - 0x9BFF
 	pub bg_tilemap1: [[u8; 0x20]; 0x20],	// 0x9C00 - 0x9FFF
+	pub objects: [OAMObject; 0x28],			// 0xFE00 - 0xFE9F
 	pub lcd_enable: bool,					// 0xFF40 & (1 << 7)
 	pub win_using_secondary_tilemap: bool,	// 0xFF40 & (1 << 6)
 	// pub win_enable: bool,					// 0xFF40 & (1 << 5)
 	pub using_fully_common_bg_tileset: bool,// 0xFF40 & (1 << 4)
 	pub bg_using_secondary_tilemap: bool,	// 0xFF40 & (1 << 3)
-	// pub double_heigth_obj: bool,			// 0xFF40 & (1 << 2)
-	// pub obj_enable: bool,					// 0xFF40 & (1 << 1)
+	pub double_heigth_obj: bool,			// 0xFF40 & (1 << 2)
+	pub obj_enable: bool,					// 0xFF40 & (1 << 1)
 	pub bg_win_enable: bool,				// 0xFF40 & (1 << 0)
-	pub background_palette: [PixelColour; 4]// 0xFF47
+	pub bg_palette: [PixelColour; 4],		// 0xFF47
+	pub obj_palette: [[PixelColour; 3]; 2]	// 0xFF48 - 0xFF49
 }
 
 impl PPUMemory {
@@ -47,25 +78,30 @@ impl PPUMemory {
 			is_vram_locked: false,
 			is_oam_locked: false,
 			video_ram: [0; 0x2000],
-			oam: [0; 0xA0],
+			oam: [0xFF; 0xA0],
 			lcdc_ram: 0,
-			bgp_ram: 0,
-			scx_ram: 0,
 			scy_ram: 0,
+			scx_ram: 0,
 			ly_ram: 0,
 			lyc_ram: 0,
+			bgp_ram: 0,
+			obp_ram: [0; 2],
+			wy_ram: 0,
+			wx_ram: 0,
 			tiles: [ [[[TilePixel::Zero;8];8];0x80]; 3],
 			bg_tilemap0: [[0; 0x20]; 0x20],
 			bg_tilemap1: [[0; 0x20]; 0x20],
+			objects: [OAMObject::new(); 0x28],
 			lcd_enable: false,
 			win_using_secondary_tilemap: false,
 			// win_enable: false,
 			using_fully_common_bg_tileset: false,
 			bg_using_secondary_tilemap: false,
-			// double_heigth_obj: false,
-			// obj_enable: false,
+			double_heigth_obj: false,
+			obj_enable: false,
 			bg_win_enable: false,
-			background_palette: [PixelColour::White, PixelColour::LightGray, PixelColour::DarkGray, PixelColour::Black]
+			bg_palette: [PixelColour::White, PixelColour::LightGray, PixelColour::DarkGray, PixelColour::Black],
+			obj_palette: [[PixelColour::LightGray, PixelColour::DarkGray, PixelColour::Black]; 2]
 		}
 	}
 	fn write_tile(&mut self, floored_even_addr: usize) {
@@ -103,7 +139,17 @@ impl PPUMemory {
 			if self.is_oam_locked {return}
 			let address = address - 0xFE00;
 			self.oam[address] = data;
-			// OAM formatting
+			match address % 4 {
+				0 => self.objects[address / 4].pos_y = data,
+				1 => self.objects[address / 4].pos_x = data,
+				2 => self.objects[address / 4].tile_id = data,
+				_ => {
+					self.objects[address / 4].is_under_bg_win = (data & (1 << 7)) != 0;
+					self.objects[address / 4].is_y_flipped = (data & (1 << 6)) != 0;
+					self.objects[address / 4].is_x_flipped = (data & (1 << 5)) != 0;
+					self.objects[address / 4].is_using_obp1 = (data & (1 << 4)) != 0;
+				}
+			}
 
 		} else if address == 0xFF40 {
 			self.lcdc_ram = data;
@@ -111,8 +157,8 @@ impl PPUMemory {
 			// self.win_enable						= (data & (1 << 5)) != 0;
 			self.using_fully_common_bg_tileset	= (data & (1 << 4)) != 0;
 			self.bg_using_secondary_tilemap		= (data & (1 << 3)) != 0;
-			// self.double_heigth_obj				= (data & (1 << 2)) != 0;
-			// self.obj_enable						= (data & (1 << 1)) != 0;
+			self.double_heigth_obj				= (data & (1 << 2)) != 0;
+			self.obj_enable						= (data & (1 << 1)) != 0;
 			self.bg_win_enable					= (data & 1) != 0;
 			let new_lcd_enable			= (data & (1 << 7)) != 0;
 			if self.lcd_enable != new_lcd_enable {
@@ -120,12 +166,22 @@ impl PPUMemory {
 				else				{self.is_oam_locked = false;	self.is_vram_locked = false;}	// LCD/PPU is disabled, freeing all access to display memory;
 				self.lcd_enable = new_lcd_enable;
 			}
-		}
-		else {										// 0xFF47
+		} else if address == 0xFF47 {
 			self.bgp_ram = data;
 			for i in 0..4 {
 				let colour_code = (data >> 2*i) & 0x03;
-				self.background_palette[i] = match colour_code {
+				self.bg_palette[i] = match colour_code {
+					0 => PixelColour::White,
+					1 => PixelColour::LightGray,
+					2 => PixelColour::DarkGray,
+					_ => PixelColour::Black
+				}
+			}
+		} else if address == 0xFF48 || address == 0xFF49{
+			self.obp_ram[address % 2] = data;
+			for i in 1..4 {
+				let colour_code = (data >> 2*i) & 0x03;
+				self.bg_palette[i - 1] = match colour_code {
 					0 => PixelColour::White,
 					1 => PixelColour::LightGray,
 					2 => PixelColour::DarkGray,

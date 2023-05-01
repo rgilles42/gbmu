@@ -21,7 +21,7 @@ pub struct MemoryBus {
 	/* oam: [u8; 0x00A0]				*/	// 0xFE00 - 0xFE9F => Inside PPUMemory
 	/* unmapped memory: [u8; 0x0060]	*/	// 0xFEA0 - 0xFEFF => Read returns 0, write does nothing
 	io_regis: [u8; 0x007F],				// 0xFF01 - 0xFF7F
-	bootrom_reg: u8,						// 0xFF50
+	bootrom_reg: u8,					// 0xFF50
 	high_intern_ram: [u8; 0x007F],		// 0xFF80 - 0xFFFE
 	interrupt_enable: u8				// 0xFFFF
 }
@@ -115,6 +115,9 @@ impl MemoryBus {
 			0xFF43			=>		  self.ppu_memory.scx_ram,
 			0xFF44			=>		  self.ppu_memory.ly_ram,
 			0xFF45			=>		  self.ppu_memory.lyc_ram,
+			0xFF48 | 0xFF49 =>		self.ppu_memory.read(address as usize),
+			0xFF4A			=>		  self.ppu_memory.wy_ram,
+			0xFF4B			=>		  self.ppu_memory.wx_ram,
 			0xFF50			=>		  self.bootrom_reg,
 			0xFF01..=0xFF7F	=>		  self.io_regis[(address - 0xFF01) as usize],
 			0xFF80..=0xFFFE	=> self.high_intern_ram[(address - 0xFF80) as usize],
@@ -139,6 +142,9 @@ impl MemoryBus {
 			0xFF43			=>		  {self.ppu_memory.scx_ram = data},
 			0xFF44			=>		  {},
 			0xFF45			=>		  {self.ppu_memory.lyc_ram = data},
+			0xFF48 | 0xFF49 =>		self.ppu_memory.write(address as usize, data),
+			0xFF4A			=>		  {self.ppu_memory.wy_ram = data},
+			0xFF4B			=>		  {self.ppu_memory.wx_ram = data},
 			0xFF50			=>		  {self.bootrom_reg = data},
 			0xFF01..=0xFF7F	=>		  {self.io_regis[(address - 0xFF01) as usize] = data},
 			0xFF80..=0xFFFE	=> {self.high_intern_ram[(address - 0xFF80) as usize] = data},
