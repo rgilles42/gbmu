@@ -2,6 +2,7 @@ mod memory_bus;
 mod cpu;
 mod ppu;
 mod timer;
+mod input;
 
 use cpu::Cpu;
 use memory_bus::MemoryBus;
@@ -27,6 +28,7 @@ fn main() {
 		for _ in 0..nb_cycles {
 			ppu.tick(&mut memory_bus);
 			timer.tick(&mut memory_bus);
+			//input_tick(&mut memory_bus, &ppu);
 		}
 	}
 }

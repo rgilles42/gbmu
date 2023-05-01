@@ -42,7 +42,7 @@ pub struct Ppu {
 	tileset_window_buf: Vec<u32>,
 	tilemap_viewer: Option<Window>,
 	tilemap_buf: Vec<u32>,
-	viewport: Window,
+	pub viewport: Window,
 	viewport_buffer: Vec<u32>
 }
 
