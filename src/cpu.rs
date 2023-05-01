@@ -45,7 +45,7 @@ impl Cpu {
 		self.get_nb_clock_current_op()
 	}
 	fn fetch_next_opcode(&mut self, memory_bus: &MemoryBus) {
-		if self.ime_set && memory_bus.read_byte(0xFFFF) & memory_bus.read_byte(0xFF0F) != 0 
+		if self.ime_set && memory_bus.read_byte(0xFFFF) & memory_bus.read_byte(0xFF0F) & 0x1F != 0 
 		{
 			self.next_op = Some(Instruction::ISR(0, 20));
 		} else {
