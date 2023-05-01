@@ -124,7 +124,7 @@ impl Ppu {
 			PPUModes::VBlank(line, _) => {
 				memory_bus.ppu_memory.ly_ram = line;
 			},
-}
+		}
 	}
 	fn update_tileset_win(&mut self, memory_bus: &mut MemoryBus) {
 		for (id_bank, bank) in memory_bus.ppu_memory.tiles.iter().enumerate() {
@@ -230,10 +230,10 @@ mod tests {
 		std::thread::sleep(std::time::Duration::from_millis(500));					// or first minifb update will fail
 		for _ in 0..70224 {
 			ppu.tick(&mut memory_bus);
-			//println!("{:?}", ppu.ppu_mode);
+			println!("{:?}", ppu.ppu_mode);
 		}
-		loop {
-		}
+		// loop {
+		// }
 	}
 	#[test]
 	fn test_tileset_fill() {

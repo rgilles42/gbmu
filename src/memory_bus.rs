@@ -1,13 +1,15 @@
 pub mod ppu_memory;
 pub mod timer_memory;
+pub mod input_memory;
 mod cartridge;
 
-use self::{ppu_memory::PPUMemory, cartridge::Cartridge, timer_memory::TimerMemory};
+use self::{ppu_memory::PPUMemory, cartridge::Cartridge, timer_memory::TimerMemory, input_memory::InputMemory};
 use std::fmt::Debug;
 
 pub struct MemoryBus {
 	pub ppu_memory: PPUMemory,
 	pub timer_memory: TimerMemory,		// 0xFF04 - 0xFF07
+	pub input_memory: InputMemory,
 	pub cartridge: Cartridge,
 	bootrom: [u8; 0x100],			// 0x0000 - 0x00FF
 	/* pub rom_bank0: [u8; 0x4000],		*/	// 0x0000 - 0x3FFF => Inside Cartridge
@@ -18,7 +20,6 @@ pub struct MemoryBus {
 	/* echo of intern_ram: [u8; 0x1E00]	*/	// 0xE000 - 0xFDFF => Inside intern_ram
 	/* oam: [u8; 0x00A0]				*/	// 0xFE00 - 0xFE9F => Inside PPUMemory
 	/* unmapped memory: [u8; 0x0060]	*/	// 0xFEA0 - 0xFEFF => Read returns 0, write does nothing
-	joyp_reg: u8,						// 0xFF00
 	io_regis: [u8; 0x007F],				// 0xFF01 - 0xFF7F
 	bootrom_reg: u8,						// 0xFF50
 	high_intern_ram: [u8; 0x007F],		// 0xFF80 - 0xFFFE
@@ -30,10 +31,10 @@ impl MemoryBus {
 		MemoryBus {
 			ppu_memory: PPUMemory::new(),
 			timer_memory: TimerMemory::new(),
+			input_memory: InputMemory::new(),
 			cartridge: Cartridge::new(rom_path),
 			bootrom: [0; 0x100],
 			intern_ram: [0; 0x2000],
-			joyp_reg: 0x0F,
 			io_regis: [0; 0x007F],
 			bootrom_reg: 0x01,
 			high_intern_ram: [0; 0x007F],
@@ -107,7 +108,7 @@ impl MemoryBus {
 			0xE000..=0xFDFF	=>		  self.intern_ram[(address - 0xE000) as usize],
 			0xFE00..=0xFE9F	=>		  self.ppu_memory.read(address as usize),
 			0xFEA0..=0xFEFF	=> 0,
-			0xFF00			=>		self.joyp_reg,
+			0xFF00			=>		self.input_memory.read(),
 			0xFF04..=0xFF07 =>		self.timer_memory.read(address as usize),
 			0xFF40 | 0xFF47 =>		  self.ppu_memory.read(address as usize),
 			0xFF42			=>		  self.ppu_memory.scy_ram,
@@ -131,7 +132,7 @@ impl MemoryBus {
 			0xE000..=0xFDFF	=>		  {self.intern_ram[(address - 0xE000) as usize] = data},
 			0xFE00..=0xFE9F	=>		   self.ppu_memory.write(address as usize, data),
 			0xFEA0..=0xFEFF	=> {},
-			0xFF00			=>		{self.joyp_reg = (data & 0b00110000) | (self.joyp_reg & 0x0F)}
+			0xFF00			=>		{self.input_memory.write(data)}
 			0xFF04..=0xFF07 =>		{self.timer_memory.write(address as usize, data)},
 			0xFF40 | 0xFF47 =>		   self.ppu_memory.write(address as usize, data),
 			0xFF42			=>		  {self.ppu_memory.scy_ram = data},
