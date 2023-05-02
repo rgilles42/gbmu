@@ -198,7 +198,7 @@ impl PPUMemory {
 			self.obp_ram[address % 2] = data;
 			for i in 1..4 {
 				let colour_code = (data >> 2*i) & 0x03;
-				self.bg_palette[i - 1] = match colour_code {
+				self.obj_palette[address % 2][i - 1] = match colour_code {
 					0 => PixelColour::White,
 					1 => PixelColour::LightGray,
 					2 => PixelColour::DarkGray,
