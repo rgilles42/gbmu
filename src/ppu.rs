@@ -65,6 +65,7 @@ impl Ppu {
 			PPUModes::OAMSearch(line_index, count) =>
 				if count == 79 {
 					memory_bus.ppu_memory.is_vram_locked = true;
+					memory_bus.ppu_memory.ppu_mode_id = 3;
 					PPUModes::LineDraw(line_index, 0)
 				} else {
 					PPUModes::OAMSearch(line_index, count + 1)
@@ -73,6 +74,7 @@ impl Ppu {
 				if count == 167 {
 					memory_bus.ppu_memory.is_vram_locked = false;
 					memory_bus.ppu_memory.is_oam_locked = false;
+					memory_bus.ppu_memory.ppu_mode_id = 0;
 					PPUModes::HBlank(line_index, count + 1)
 				} else {
 					PPUModes::LineDraw(line_index, count + 1)
@@ -81,9 +83,11 @@ impl Ppu {
 				if count == 375 {
 					if line_index == 143 {
 						memory_bus.write_byte(0xFF0F, memory_bus.read_byte(0xFF0F) | (1 << 0));
+						memory_bus.ppu_memory.ppu_mode_id = 1;
 						PPUModes::VBlank(144, 0)
 					} else {
 						memory_bus.ppu_memory.is_oam_locked = true;
+						memory_bus.ppu_memory.ppu_mode_id = 2;
 						PPUModes::OAMSearch(line_index + 1, 0)
 					}
 				} else {
@@ -100,8 +104,12 @@ impl Ppu {
 	}
 	fn tick_viewport(&mut self, memory_bus: &mut MemoryBus) {
 		match self.ppu_mode {
-			PPUModes::OAMSearch(line, _) => {
-				memory_bus.ppu_memory.ly_ram = line;
+			PPUModes::OAMSearch(line, count) => {
+				if count == 0 {
+					memory_bus.ppu_memory.ly_ram = line;
+					memory_bus.ppu_memory.lyc_match_flag = line == memory_bus.ppu_memory.lyc_ram;
+					// Collect all sprite tile rows on current line
+				}
 			},
 			PPUModes::LineDraw(line, count) => {
 				if count < VIEWPORT_PX_WIDTH {
