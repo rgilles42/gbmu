@@ -17,13 +17,13 @@ pub enum PixelColour {
 
 #[derive(Copy, Clone)]
 pub struct OAMObject {
-	tile_id: u8,
-	pos_x: u8,
-	pos_y: u8,
-	is_using_obp1: bool,
-	is_x_flipped: bool,
-	is_y_flipped: bool,
-	is_under_bg_win: bool,
+	pub tile_id: u8,
+	pub pos_x: u8,
+	pub pos_y: u8,
+	pub is_using_obp1: bool,
+	pub is_x_flipped: bool,
+	pub is_y_flipped: bool,
+	pub is_under_bg_win: bool,
 }
 
 impl OAMObject {

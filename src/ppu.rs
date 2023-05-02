@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use minifb::{Key, Window, WindowOptions};
 use crate::memory_bus::MemoryBus;
-use crate::memory_bus::ppu_memory::{TilePixel, PixelColour};
+use crate::memory_bus::ppu_memory::{TilePixel, PixelColour, TileRow};
 
 const TILE_WIDTH: usize = 0x08;
 const TILE_HEIGHT: usize = 0x08;
@@ -38,6 +38,8 @@ pub struct Ppu {
 	ppu_mode: PPUModes,
 	palette_translation: HashMap<PixelColour, u32>,
 
+	current_line_obj_rows: Vec<TileRow>,
+
 	tileset_viewer: Option<Window>,
 	tileset_window_buf: Vec<u32>,
 	tilemap_viewer: Option<Window>,
@@ -51,6 +53,7 @@ impl Ppu {
 		let ppu = Ppu {
 			ppu_mode: PPUModes::OAMSearch(0, 0),
 			palette_translation: HashMap::from([(PixelColour::White, 0x00FFFFFF), (PixelColour::LightGray, 0x00A9A9A9), (PixelColour::DarkGray, 0x00545454), (PixelColour::Black, 0x00000000)]),
+			current_line_obj_rows: Vec::new(),
 			tileset_viewer: if with_tileset {Some(Window::new("Tileset", TILESET_VIEWER_PX_WIDTH, TILESET_VIEWER_PX_HEIGHT, WindowOptions {scale: minifb::Scale::X4,..WindowOptions::default()}).unwrap())} else {None},
 			tileset_window_buf: vec![0; TILESET_VIEWER_PX_SIZE],
 			tilemap_viewer: if with_tilemap {Some(Window::new("Tilemap", TILEMAP_PX_WIDTH, TILEMAP_PX_HEIGHT, WindowOptions {scale: minifb::Scale::X4,..WindowOptions::default()}).unwrap())} else {None},
@@ -121,7 +124,22 @@ impl Ppu {
 				if count == 0 {
 					memory_bus.ppu_memory.ly_ram = line;
 					memory_bus.ppu_memory.lyc_match_flag = line == memory_bus.ppu_memory.lyc_ram;
-					// Collect all sprite tile rows on current line
+					self.current_line_obj_rows.clear();
+				}
+				if count % 2 == 0 && self.current_line_obj_rows.len() != 10 {
+					let obj_bottom_line_plus_1 = memory_bus.ppu_memory.objects[count / 2].pos_y;
+					if memory_bus.ppu_memory.double_heigth_obj && line < obj_bottom_line_plus_1 && line + 16 >= obj_bottom_line_plus_1 {
+						self.current_line_obj_rows.push(memory_bus.ppu_memory.get_obj_row(
+							memory_bus.ppu_memory.objects[count / 2].tile_id,
+							if memory_bus.ppu_memory.objects[count / 2].is_y_flipped {obj_bottom_line_plus_1 - line - 1} else {16 - (obj_bottom_line_plus_1 - line)}
+						));
+					}
+					if !memory_bus.ppu_memory.double_heigth_obj && line + 8 < obj_bottom_line_plus_1 && line + 16 >= obj_bottom_line_plus_1 {
+						self.current_line_obj_rows.push(memory_bus.ppu_memory.get_obj_row(
+							memory_bus.ppu_memory.objects[count / 2].tile_id,
+							if memory_bus.ppu_memory.objects[count / 2].is_y_flipped {obj_bottom_line_plus_1 - line - 9} else {8 - (obj_bottom_line_plus_1 - line - 8)}
+					));
+					}
 				}
 			},
 			PPUModes::LineDraw(line, count) => {
@@ -138,6 +156,9 @@ impl Ppu {
 						};
 					} else {
 						self.viewport_buffer[(line as usize) * VIEWPORT_PX_WIDTH + count] = self.palette_translation[&PixelColour::White];
+					}
+					if memory_bus.ppu_memory.obj_enable {
+						// just write object rows pixels on top bruh lol just do it
 					}
 				}
 			},
