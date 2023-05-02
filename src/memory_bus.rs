@@ -111,6 +111,7 @@ impl MemoryBus {
 			0xFF00			=>		self.input_memory.read(),
 			0xFF04..=0xFF07 =>		self.timer_memory.read(address as usize),
 			0xFF40 | 0xFF47 =>		  self.ppu_memory.read(address as usize),
+			0xFF41			=>		self.ppu_memory.read(address as usize),
 			0xFF42			=>		  self.ppu_memory.scy_ram,
 			0xFF43			=>		  self.ppu_memory.scx_ram,
 			0xFF44			=>		  self.ppu_memory.ly_ram,
@@ -138,6 +139,7 @@ impl MemoryBus {
 			0xFF00			=>		{self.input_memory.write(data)}
 			0xFF04..=0xFF07 =>		{self.timer_memory.write(address as usize, data)},
 			0xFF40 | 0xFF47 =>		   self.ppu_memory.write(address as usize, data),
+			0xFF41			=>		self.ppu_memory.write(address as usize, data),
 			0xFF42			=>		  {self.ppu_memory.scy_ram = data},
 			0xFF43			=>		  {self.ppu_memory.scx_ram = data},
 			0xFF44			=>		  {},

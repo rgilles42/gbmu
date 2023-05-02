@@ -68,6 +68,12 @@ pub struct PPUMemory {
 	pub double_heigth_obj: bool,			// 0xFF40 & (1 << 2)
 	pub obj_enable: bool,					// 0xFF40 & (1 << 1)
 	pub bg_win_enable: bool,				// 0xFF40 & (1 << 0)
+	pub lyc_interrupt_enable: bool,			// 0xFF41 & (1 << 6)
+	pub ppu_mode_2_interrupt_enable: bool,	// 0xFF41 & (1 << 5)
+	pub ppu_mode_1_interrupt_enable: bool,	// 0xFF41 & (1 << 4)
+	pub ppu_mode_0_interrupt_enable: bool,	// 0xFF41 & (1 << 3)
+	pub lyc_match_flag: bool,				// 0xFF41 & (1 << 2)
+	pub ppu_mode_id: u8,					// 0xFF41 & 0x03
 	pub bg_palette: [PixelColour; 4],		// 0xFF47
 	pub obj_palette: [[PixelColour; 3]; 2]	// 0xFF48 - 0xFF49
 }
@@ -100,8 +106,14 @@ impl PPUMemory {
 			double_heigth_obj: false,
 			obj_enable: false,
 			bg_win_enable: false,
+			lyc_interrupt_enable: false,
+			ppu_mode_2_interrupt_enable: false,
+			ppu_mode_1_interrupt_enable: false,
+			ppu_mode_0_interrupt_enable: false,
+			lyc_match_flag: false,
+			ppu_mode_id: 2,
 			bg_palette: [PixelColour::White, PixelColour::LightGray, PixelColour::DarkGray, PixelColour::Black],
-			obj_palette: [[PixelColour::LightGray, PixelColour::DarkGray, PixelColour::Black]; 2]
+			obj_palette: [[PixelColour::LightGray, PixelColour::DarkGray, PixelColour::Black]; 2],
 		}
 	}
 	fn write_tile(&mut self, floored_even_addr: usize) {
@@ -166,6 +178,11 @@ impl PPUMemory {
 				else				{self.is_oam_locked = false;	self.is_vram_locked = false;}	// LCD/PPU is disabled, freeing all access to display memory;
 				self.lcd_enable = new_lcd_enable;
 			}
+		} else if address == 0xFF41 {
+			self.lyc_interrupt_enable			= (data & (1 << 6)) != 0;
+			self.ppu_mode_2_interrupt_enable	= (data & (1 << 5)) != 0;
+			self.ppu_mode_1_interrupt_enable	= (data & (1 << 4)) != 0;
+			self.ppu_mode_0_interrupt_enable	= (data & (1 << 3)) != 0;
 		} else if address == 0xFF47 {
 			self.bgp_ram = data;
 			for i in 0..4 {
@@ -205,11 +222,19 @@ impl PPUMemory {
 				let address = address - 0xFE00;
 				self.oam[address]
 			}
-		} else if address == 0xFF40 {
-			self.lcdc_ram
-		} else {							// 0xFF47
-			self.bgp_ram
 		}
+		else if address == 0xFF40 { self.lcdc_ram }
+		else if address == 0xFF41 {
+			(self.lyc_interrupt_enable as u8) << 6 |
+			(self.ppu_mode_2_interrupt_enable as u8) << 5 |
+			(self.ppu_mode_1_interrupt_enable as u8) << 4 |
+			(self.ppu_mode_0_interrupt_enable as u8) << 3 |
+			(self.lyc_match_flag as u8) << 2 |
+			(self.ppu_mode_id & 0x03) 
+		}
+		else if address == 0xFF47 {	self.bgp_ram }
+		else if address == 0xFF48 { self.obp_ram[0] }
+		else { self.obp_ram[1] }	// address == 0xFF49
 	}
 	pub fn get_bg_tile_index(&self, x: u8, y: u8) -> u8{
 		if self.bg_using_secondary_tilemap {
