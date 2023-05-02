@@ -75,6 +75,9 @@ impl Ppu {
 					memory_bus.ppu_memory.is_vram_locked = false;
 					memory_bus.ppu_memory.is_oam_locked = false;
 					memory_bus.ppu_memory.ppu_mode_id = 0;
+					if memory_bus.ppu_memory.ppu_mode_0_interrupt_enable {
+						memory_bus.write_byte(0xFF0F, memory_bus.read_byte(0xFF0F) | (1 << 1));
+					}
 					PPUModes::HBlank(line_index, count + 1)
 				} else {
 					PPUModes::LineDraw(line_index, count + 1)
@@ -84,10 +87,16 @@ impl Ppu {
 					if line_index == 143 {
 						memory_bus.write_byte(0xFF0F, memory_bus.read_byte(0xFF0F) | (1 << 0));
 						memory_bus.ppu_memory.ppu_mode_id = 1;
+						if memory_bus.ppu_memory.ppu_mode_1_interrupt_enable {
+							memory_bus.write_byte(0xFF0F, memory_bus.read_byte(0xFF0F) | (1 << 1));
+						}
 						PPUModes::VBlank(144, 0)
 					} else {
 						memory_bus.ppu_memory.is_oam_locked = true;
 						memory_bus.ppu_memory.ppu_mode_id = 2;
+						if memory_bus.ppu_memory.ppu_mode_2_interrupt_enable {
+							memory_bus.write_byte(0xFF0F, memory_bus.read_byte(0xFF0F) | (1 << 1));
+						}
 						PPUModes::OAMSearch(line_index + 1, 0)
 					}
 				} else {
@@ -96,6 +105,10 @@ impl Ppu {
 			PPUModes::VBlank(_, count) =>
 				if count == 4559 {
 					memory_bus.ppu_memory.is_oam_locked = true;
+					memory_bus.ppu_memory.ppu_mode_id = 2;
+						if memory_bus.ppu_memory.ppu_mode_2_interrupt_enable {
+							memory_bus.write_byte(0xFF0F, memory_bus.read_byte(0xFF0F) | (1 << 1));
+						}
 					PPUModes::OAMSearch(0, 0)
 				} else {
 					PPUModes::VBlank(144 + ((count + 1) / 456) as u8, count + 1)
