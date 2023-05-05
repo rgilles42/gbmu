@@ -38,7 +38,8 @@ pub struct Ppu {
 	ppu_mode: PPUModes,
 	palette_translation: HashMap<PixelColour, u32>,
 
-	current_line_obj_rows: Vec<TileRow>,
+	current_line_obj_rows: Vec<(usize, TileRow, bool)>,
+
 	oam_dma_count: usize,
 
 	tileset_viewer: Option<Window>,
@@ -55,6 +56,7 @@ impl Ppu {
 			ppu_mode: PPUModes::OAMSearch(0, 0),
 			palette_translation: HashMap::from([(PixelColour::White, 0x00FFFFFF), (PixelColour::LightGray, 0x00A9A9A9), (PixelColour::DarkGray, 0x00545454), (PixelColour::Black, 0x00000000)]),
 			current_line_obj_rows: Vec::new(),
+			oam_dma_count: 0,
 			tileset_viewer: if with_tileset {Some(Window::new("Tileset", TILESET_VIEWER_PX_WIDTH, TILESET_VIEWER_PX_HEIGHT, WindowOptions {scale: minifb::Scale::X4,..WindowOptions::default()}).unwrap())} else {None},
 			tileset_window_buf: vec![0; TILESET_VIEWER_PX_SIZE],
 			tilemap_viewer: if with_tilemap {Some(Window::new("Tilemap", TILEMAP_PX_WIDTH, TILEMAP_PX_HEIGHT, WindowOptions {scale: minifb::Scale::X4,..WindowOptions::default()}).unwrap())} else {None},
@@ -128,38 +130,62 @@ impl Ppu {
 					self.current_line_obj_rows.clear();
 				}
 				if count % 2 == 0 && self.current_line_obj_rows.len() != 10 {
-					let obj_bottom_line_plus_1 = memory_bus.ppu_memory.objects[count / 2].pos_y;
+					let examined_obj = memory_bus.ppu_memory.objects[count / 2];
+					let obj_bottom_line_plus_1 = examined_obj.pos_y;
 					if memory_bus.ppu_memory.double_heigth_obj && line < obj_bottom_line_plus_1 && line + 16 >= obj_bottom_line_plus_1 {
-						self.current_line_obj_rows.push(memory_bus.ppu_memory.get_obj_row(
-							memory_bus.ppu_memory.objects[count / 2].tile_id,
-							if memory_bus.ppu_memory.objects[count / 2].is_y_flipped {obj_bottom_line_plus_1 - line - 1} else {16 - (obj_bottom_line_plus_1 - line)}
-						));
+						let mut row = memory_bus.ppu_memory.get_obj_row(examined_obj.tile_id,
+							if examined_obj.is_y_flipped {obj_bottom_line_plus_1 - line - 1} else {16 - (obj_bottom_line_plus_1 - line)}
+						);
+						self.current_line_obj_rows.push(
+							(	examined_obj.pos_x as usize, 
+								if examined_obj.is_x_flipped {row.reverse(); row} else {row},
+								examined_obj.is_using_obp1	)
+						);
 					}
 					if !memory_bus.ppu_memory.double_heigth_obj && line + 8 < obj_bottom_line_plus_1 && line + 16 >= obj_bottom_line_plus_1 {
-						self.current_line_obj_rows.push(memory_bus.ppu_memory.get_obj_row(
-							memory_bus.ppu_memory.objects[count / 2].tile_id,
-							if memory_bus.ppu_memory.objects[count / 2].is_y_flipped {obj_bottom_line_plus_1 - line - 9} else {8 - (obj_bottom_line_plus_1 - line - 8)}
-					));
+						let mut row = memory_bus.ppu_memory.get_obj_row(examined_obj.tile_id,
+							if examined_obj.is_y_flipped {obj_bottom_line_plus_1 - line - 9} else {8 - (obj_bottom_line_plus_1 - line - 8)}
+						);
+						self.current_line_obj_rows.push(
+							(	examined_obj.pos_x as usize, 
+								if examined_obj.is_x_flipped {row.reverse(); row} else {row},
+								examined_obj.is_using_obp1	)
+						);
 					}
 				}
 			},
 			PPUModes::LineDraw(line, count) => {
+				if count == 0 {
+					// if non-cgb
+					self.current_line_obj_rows.sort_by(|row_a, row_b| row_a.0.cmp(&row_b.0))
+				}
 				if count < VIEWPORT_PX_WIDTH {
 					if memory_bus.ppu_memory.bg_win_enable {
 						let tile_index = memory_bus.ppu_memory.get_bg_tile_index(memory_bus.ppu_memory.scx_ram.overflowing_add(count as u8).0 / 8, memory_bus.ppu_memory.scy_ram.overflowing_add(line).0 / 8);
 						let tile = memory_bus.ppu_memory.get_bg_win_tile(tile_index);
 						let pixel = tile[(memory_bus.ppu_memory.scy_ram as usize + line as usize) % 8][(memory_bus.ppu_memory.scx_ram as usize + count) % 8];
 						self.viewport_buffer[(line as usize) * VIEWPORT_PX_WIDTH + count] = match pixel {
-							TilePixel::Zero => self.palette_translation[&memory_bus.ppu_memory.bg_palette[0]],
-							TilePixel::One => self.palette_translation[&memory_bus.ppu_memory.bg_palette[1]],
-							TilePixel::Two => self.palette_translation[&memory_bus.ppu_memory.bg_palette[2]],
-							TilePixel::Three => self.palette_translation[&memory_bus.ppu_memory.bg_palette[3]],
+							TilePixel::Zero =>	self.palette_translation[&memory_bus.ppu_memory.bg_palette[0]],
+							TilePixel::One =>	self.palette_translation[&memory_bus.ppu_memory.bg_palette[1]],
+							TilePixel::Two =>	self.palette_translation[&memory_bus.ppu_memory.bg_palette[2]],
+							TilePixel::Three =>	self.palette_translation[&memory_bus.ppu_memory.bg_palette[3]],
 						};
 					} else {
 						self.viewport_buffer[(line as usize) * VIEWPORT_PX_WIDTH + count] = self.palette_translation[&PixelColour::White];
 					}
 					if memory_bus.ppu_memory.obj_enable {
-						// just write object rows pixels on top bruh lol just do it
+						let mut pixel = (TilePixel::Zero, 0);
+						for relevant_row in &self.current_line_obj_rows {
+							if count < relevant_row.0 && count + 8 >= relevant_row.0 {
+								pixel = (relevant_row.1[8 - (relevant_row.0 - count)], relevant_row.2 as usize);
+							}
+						}
+						self.viewport_buffer[(line as usize) * VIEWPORT_PX_WIDTH + count] = match pixel.0 {
+							TilePixel::Zero =>	self.viewport_buffer[(line as usize) * VIEWPORT_PX_WIDTH + count],
+							TilePixel::One =>	self.palette_translation[&memory_bus.ppu_memory.obj_palette[pixel.1][0]],
+							TilePixel::Two =>	self.palette_translation[&memory_bus.ppu_memory.obj_palette[pixel.1][1]],
+							TilePixel::Three =>	self.palette_translation[&memory_bus.ppu_memory.obj_palette[pixel.1][2]],
+						};
 					}
 				}
 			},
