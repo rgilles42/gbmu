@@ -39,6 +39,7 @@ pub struct Ppu {
 	palette_translation: HashMap<PixelColour, u32>,
 
 	current_line_obj_rows: Vec<TileRow>,
+	oam_dma_count: usize,
 
 	tileset_viewer: Option<Window>,
 	tileset_window_buf: Vec<u32>,
@@ -245,6 +246,22 @@ impl Ppu {
 			}
 		}
 	}
+
+	fn tick_oam_dma(&mut self, memory_bus: &mut MemoryBus) {
+		if self.oam_dma_count % 4 == 3 && self.oam_dma_count != 3{
+			//TODO do not use general read/write
+			memory_bus.ppu_memory.write(0xFE00 + self.oam_dma_count / 4 - 1,
+				memory_bus.read_byte(memory_bus.oam_dma_reg as u16 * 0x100 + self.oam_dma_count as u16 / 4 - 1)
+			)
+		}
+		if self.oam_dma_count == 643 {
+			memory_bus.oam_dma_reg = 0x00;
+			self.oam_dma_count = 0;
+		} else {
+			self.oam_dma_count += 1;
+		}
+	}
+
 	pub fn tick(&mut self, memory_bus: &mut MemoryBus) {
 		if memory_bus.ppu_memory.lcd_enable {
 			self.tick_viewport(memory_bus);
@@ -255,6 +272,9 @@ impl Ppu {
 		}
 		else {
 			self.ppu_mode = PPUModes::OAMSearch(0, 0)
+		}
+		if memory_bus.oam_dma_reg != 0x00 {
+			self.tick_oam_dma(memory_bus);
 		}
 	}
 }
