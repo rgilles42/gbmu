@@ -57,7 +57,7 @@ impl Cpu {
 			if let Some(instruction) = self.current_op {
 				instruction
 			} else {
-				panic!("Unknown opcode 0x{:x} at location 0x{:x}!", memory_bus.read_byte(self.registers.program_counter - 1), self.registers.program_counter - 1);
+				panic!("Unknown opcode 0x{:x} at location 0x{:x}!\n{:?}", memory_bus.read_byte(self.registers.program_counter - 1), self.registers.program_counter - 1, self);
 			}
 		)
 	}

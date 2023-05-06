@@ -28,7 +28,7 @@ impl Cartridge {
 			if let Ok(cart) = Cartridge::load_from_path(path) {
 				cart
 			} else {
-				panic!("Unable to open ROM file at {}1", path)
+				panic!("Unable to open ROM file at {}", path)
 			}
 		} else {
 			Cartridge {
@@ -69,7 +69,7 @@ impl Cartridge {
 	}
 	pub fn write(&mut self, address: usize, data: u8) {
 		match address {
-			0x0000..=0x7FFF	=> {self.rom_contents[address] = data},
+			0x0000..=0x7FFF	=> {println!("Oops, tried to write {} at 0x{:X}", data, address)},
 			0xA000..=0xBFFF	=> if let RAMType::None = self.ram_type {}
 								else {self.cartr_ram[(address - 0xA000)] = data},
 			_ => {}
