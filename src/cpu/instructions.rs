@@ -573,7 +573,7 @@ impl Cpu {
 				let r = reg_a_content.overflowing_sub(operand_val + carry_val).0;
 				self.registers.f.zero = r as u8 == 0;
 				self.registers.f.substract = true;
-				self.registers.f.half_carry = (reg_a_content & 0xF) - carry_val < (operand_val & 0xF);	// carry val is subs befor comp, from what I got of the nintendo manual
+				self.registers.f.half_carry = (reg_a_content & 0xF).overflowing_sub(carry_val).0 < (operand_val & 0xF);	// carry val is subs befor comp, from what I got of the nintendo manual
 				self.registers.f.carry = r & 0x100 != 0; 					// reg_a_content < operand + carry; In unsigned logic, a borrow from the next unset bit sets it
 				self.registers.a = r as u8;
 			}
@@ -1003,6 +1003,7 @@ mod tests {
 	fn test_arith() {
 		let mut memory_bus = MemoryBus::new(None);
 		let mut my_cpu = Cpu::new();
+		my_cpu.registers.program_counter = 0xC000;
 		test_adds(&mut my_cpu, &mut memory_bus, 0x12, 0x24, 0x00.into());
 		test_adds(&mut my_cpu, &mut memory_bus, 0x80, 0x00, FlagsRegister{ zero: true, substract: false, half_carry: false, carry: true });
 		test_adds(&mut my_cpu, &mut memory_bus, 0xF1, 0xE2, FlagsRegister{ zero: false, substract: false, half_carry: false, carry: true });
