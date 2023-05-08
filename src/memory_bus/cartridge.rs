@@ -23,7 +23,8 @@ pub struct Cartridge {
 	ram_banks: Vec<[u8; 0x2000]>,
 	ram_enable: bool,
 	current_ram_bank: usize,
-	mbc1_banking_mode_select: bool
+	mbc1_banking_mode_select: bool,
+	mbc5_9th_rom_bank_bit: usize
 }
 
 impl Cartridge {
@@ -44,7 +45,8 @@ impl Cartridge {
 				ram_banks: Vec::new(),
 				ram_enable: false,
 				current_ram_bank: 0x00,
-				mbc1_banking_mode_select: false
+				mbc1_banking_mode_select: false,
+				mbc5_9th_rom_bank_bit: 0x00
 			}
 		}
 	}
@@ -106,13 +108,14 @@ impl Cartridge {
 			],
 			ram_enable: false,
 			current_ram_bank: 0x00,
-			mbc1_banking_mode_select: false
+			mbc1_banking_mode_select: false,
+			mbc5_9th_rom_bank_bit: 0x00
 		})
 	}
 	pub fn read(&self, address: usize) -> u8 {
 		match address {
 			0x0000..=0x3FFF	=> self.rom_banks[if self.mbc1_banking_mode_select {self.current_ram_bank << 5} else {0}][address],
-			0x4000..=0x7FFF	=> self.rom_banks[self.current_2d_rom_bank | if self.mapper_type == MapperType::MBC1 {self.current_ram_bank << 5} else {0}][address - 0x4000],
+			0x4000..=0x7FFF	=> self.rom_banks[if self.mapper_type == MapperType::MBC1 {self.current_ram_bank << 5} else {0} | self.mbc5_9th_rom_bank_bit << 9 | self.current_2d_rom_bank][address - 0x4000],
 			0xA000..=0xBFFF	=> if let RAMType::None = self.ram_type {0xFF} else if !self.ram_enable {0xFF}
 								else {self.ram_banks[if self.mapper_type == MapperType::MBC1 && !self.mbc1_banking_mode_select {0} else {self.current_ram_bank}][(address - 0xA000) % if self.mapper_type == MapperType::MBC2 {0x01FF} else {0x1FFF}]},
 			_ => 0
@@ -179,7 +182,40 @@ impl Cartridge {
 				}
 			},
 			MapperType::MBC3 => todo!(),
-			MapperType::MBC5 => todo!(),
+			MapperType::MBC5 => {
+				match address {
+					0x0000..=0x1FFF => if data & 0x0F == 0x0A {self.ram_enable = true} else {self.ram_enable = false}
+					0x2000..=0x2FFF => {
+						self.current_2d_rom_bank = (data as usize) & match self.rom_type {
+																		ROMType::X2_32KiB	=> 0x01,
+																		ROMType::X4_64KiB	=> 0x03,
+																		ROMType::X8_128KiB	=> 0x07,
+																		ROMType::X16_256KiB	=> 0x0F,
+																		ROMType::X32_512KiB	=> 0x1F,
+																		ROMType::X64_1MiB	=> 0x3F,
+																		ROMType::X128_2MiB	=> 0x7F,
+																		_					=> 0xFF
+        															}
+						}
+					0x3000..=0x3FFF => {
+						self.mbc5_9th_rom_bank_bit = if data & 0x01 != 0 && self.rom_type == ROMType::X512_8MiB {1} else {0} 
+					}
+					0x4000..=0x5FFF => {
+						if data <= 0x0F {
+							self.current_ram_bank = (data as usize) & match self.ram_type {
+																		RAMType::None		=> 0x00,
+																		RAMType::X1_8KiB	=> 0x01,
+																		RAMType::X4_32KiB	=> 0x03,
+																		RAMType::X8_64KiB	=> 0x07,
+																		RAMType::X16_128KiB	=> 0x0F
+																	}
+						}
+					}
+					0xA000..=0xBFFF => if let RAMType::None = self.ram_type {}
+						else if self.ram_enable {self.ram_banks[self.current_ram_bank][address - 0xA000] = data}
+					_ => {}
+				}
+			},
 		}
 	}
 	pub fn _debug_insert_cart_logo(&mut self) {

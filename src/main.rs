@@ -20,9 +20,9 @@ fn main() {
 	cpu.tick(&mut memory_bus);									// "Virtual" tick to realise first PC pointee byte fetch; no operation is executed
 	while cpu.registers.program_counter - 1 != 0xFFFF {			// When the op at PC is about to be executed, PC is now PC+1
 	// while nb_ticks <= 23579000 {
-	// 	if nb_ticks > 23577000 {	
-	// 		debug_enabled = true;
-	// 	}
+		if nb_ticks == u64::MAX {	
+			debug_enabled = true;
+		}
 		if debug_enabled {
 			println!("{:x?}", cpu);
 			println!("Tick count: {}", nb_ticks);
