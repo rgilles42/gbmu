@@ -384,7 +384,7 @@ mod tests {
 		let mut ppu = Ppu::new(false, true);
 		let mut cpu = crate::Cpu::new();
 		memory_bus.load_dmg_bootrom();
-		memory_bus.cartridge.debug_insert_cart_logo();
+		memory_bus.cartridge._debug_insert_cart_logo();
 		cpu.tick(&mut memory_bus);
 		while cpu.registers.program_counter - 1 != 0x55 {
 			cpu.tick(&mut memory_bus);

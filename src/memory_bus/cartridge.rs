@@ -1,15 +1,15 @@
 use std::fs;
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum MapperType {
 	None, MBC1, MBC2, MBC3, MBC5
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ROMType {
 	X2_32KiB, X4_64KiB, X8_128KiB, X16_256KiB, X32_512KiB, X64_1MiB, X128_2MiB, X256_4MiB, X512_8MiB
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum RAMType {
 	None, X1_8KiB, X4_32KiB, X8_64KiB, X16_128KiB
 }
@@ -18,11 +18,12 @@ pub struct Cartridge {
 	mapper_type: MapperType,
 	rom_type: ROMType,
 	rom_banks: Vec<[u8; 0x4000]>,
-	current_1st_rom_bank: usize,
 	current_2d_rom_bank: usize,
 	ram_type: RAMType,
 	ram_banks: Vec<[u8; 0x2000]>,
-	current_ram_bank: usize
+	ram_enable: bool,
+	current_ram_bank: usize,
+	mbc1_banking_mode_select: bool
 }
 
 impl Cartridge {
@@ -38,11 +39,12 @@ impl Cartridge {
 				mapper_type: MapperType::None,
 				rom_type: ROMType::X2_32KiB,
 				rom_banks: vec![[0xFF; 0x4000]; 2],
-				current_1st_rom_bank: 0,
-				current_2d_rom_bank: 1,
+				current_2d_rom_bank: 0x01,
 				ram_type: RAMType::None,
 				ram_banks: Vec::new(),
-				current_ram_bank: 0
+				ram_enable: false,
+				current_ram_bank: 0x00,
+				mbc1_banking_mode_select: false
 			}
 		}
 	}
@@ -71,7 +73,7 @@ impl Cartridge {
 			0x03 => RAMType::X4_32KiB,
 			0x04 => RAMType::X16_128KiB,
 			0x05 => RAMType::X8_64KiB,
-			_ => RAMType::None
+			_ => if mapper_type == MapperType::MBC2 {RAMType::X1_8KiB} else {RAMType::None}
 		};
 		let mut rom_banks = vec![[0xFF; 0x4000]; match rom_type {
 				ROMType::X2_32KiB =>	0x02,
@@ -92,7 +94,6 @@ impl Cartridge {
 			mapper_type,
 			rom_type,
 			rom_banks,
-			current_1st_rom_bank: 0x00,
 			current_2d_rom_bank: 0x01,
 			ram_type,
 			ram_banks: vec![[0x00; 0x2000]; match ram_type {
@@ -103,27 +104,85 @@ impl Cartridge {
 				RAMType::X16_128KiB => 16,
 				}
 			],
+			ram_enable: false,
 			current_ram_bank: 0x00,
+			mbc1_banking_mode_select: false
 		})
 	}
 	pub fn read(&self, address: usize) -> u8 {
 		match address {
-			0x0000..=0x3FFF	=> self.rom_banks[self.current_1st_rom_bank][address],
-			0x4000..=0x7FFF	=> self.rom_banks[self.current_2d_rom_bank][address - 0x4000],
-			0xA000..=0xBFFF	=> if let RAMType::None = self.ram_type {0xFF}
-								else {self.ram_banks[self.current_ram_bank][(address - 0xA000)]},
+			0x0000..=0x3FFF	=> self.rom_banks[if self.mbc1_banking_mode_select {self.current_ram_bank << 5} else {0}][address],
+			0x4000..=0x7FFF	=> self.rom_banks[self.current_2d_rom_bank | if self.mapper_type == MapperType::MBC1 {self.current_ram_bank << 5} else {0}][address - 0x4000],
+			0xA000..=0xBFFF	=> if let RAMType::None = self.ram_type {0xFF} else if !self.ram_enable {0xFF}
+								else {self.ram_banks[if self.mapper_type == MapperType::MBC1 && !self.mbc1_banking_mode_select {0} else {self.current_ram_bank}][(address - 0xA000) % if self.mapper_type == MapperType::MBC2 {0x01FF} else {0x1FFF}]},
 			_ => 0
 		}
 	}
 	pub fn write(&mut self, address: usize, data: u8) {
-		match address {
-			0x0000..=0x7FFF	=> {println!("Oops, tried to write {} at 0x{:X}", data, address)},
-			0xA000..=0xBFFF	=> if let RAMType::None = self.ram_type {}
-								else {self.ram_banks[self.current_ram_bank][(address - 0xA000)] = data},
-			_ => {}
+		match self.mapper_type {
+			MapperType::None =>
+				match address {
+					0x0000..=0x7FFF	=> {},
+					0xA000..=0xBFFF	=> if let RAMType::None = self.ram_type {}
+										else if self.ram_enable {self.ram_banks[self.current_ram_bank][(address - 0xA000)] = data},
+					_ => {}
+				}
+			MapperType::MBC1 =>
+				match address {
+					0x0000..=0x1FFF => if data & 0x0F == 0x0A {self.ram_enable = true} else {self.ram_enable = false}
+					0x2000..=0x2FFF => {
+						let mut data = data & 0x1F;
+						if data == 0x00 {data = 0x01}
+						self.current_2d_rom_bank = (data as usize) & match self.rom_type {
+																		ROMType::X2_32KiB	=> 0x01,
+																		ROMType::X4_64KiB	=> 0x03,
+																		ROMType::X8_128KiB	=> 0x07,
+																		ROMType::X16_256KiB	=> 0x0F,
+																		_					=> 0x1F,
+        															}
+						}
+					0x4000..=0x5FFF => {
+						let data = data & 0x03;
+						if data >= 0x02 && (self.ram_type == RAMType::X4_32KiB || self.rom_type == ROMType::X128_2MiB) 
+						|| data == 0x01 && (self.ram_type == RAMType::X4_32KiB || self.rom_type == ROMType::X64_1MiB || self.rom_type == ROMType::X128_2MiB)
+						|| data == 0x00 {
+							self.current_ram_bank = data as usize;
+						}
+					}
+					0x6000..=0x7FFF => {
+						if data & 0x01 != 0x00 && (self.ram_type == RAMType::X4_32KiB || self.rom_type == ROMType::X64_1MiB || self.rom_type == ROMType::X128_2MiB) {
+							self.mbc1_banking_mode_select = true
+						}
+						else {self.mbc1_banking_mode_select = false}
+					}
+					0xA000..=0xBFFF	=> if let RAMType::None = self.ram_type {}
+										else if self.ram_enable {self.ram_banks[if !self.mbc1_banking_mode_select {0} else {self.current_ram_bank}][(address - 0xA000)] = data},
+					_ => {}
+				}
+			MapperType::MBC2 => {
+				match address {
+					0x0000..=0x3FFF => {
+						if address & 0x0100 == 0 {if data == 0x0A {self.ram_enable = true} else {self.ram_enable = false}}
+						else {
+							let mut data = data & 0x0F;
+							if data == 0x00 {data = 0x01}
+							self.current_2d_rom_bank = (data as usize) & match self.rom_type {
+																			ROMType::X2_32KiB	=> 0x01,
+																			ROMType::X4_64KiB	=> 0x03,
+																			ROMType::X8_128KiB	=> 0x07,
+																			_					=> 0x0F,
+																		};
+						}
+					}
+					0xA000..=0xBFFF => if self.ram_enable {self.ram_banks[0][(address - 0xA000) % 0x01FF] = data}
+					_ => {}
+				}
+			},
+			MapperType::MBC3 => todo!(),
+			MapperType::MBC5 => todo!(),
 		}
 	}
-	pub fn debug_insert_cart_logo(&mut self) {
+	pub fn _debug_insert_cart_logo(&mut self) {
 		let logo_data : [u8; 48] = [
 			0xCE, 0xED, 0x66, 0x66, 0xCC, 0x0D, 0x00, 0x0B, 
 			0x03, 0x73, 0x00, 0x83, 0x00, 0x0C, 0x00, 0x0D, 0x00, 0x08, 0x11, 0x1F, 0x88, 0x89, 0x00, 0x0E, 
