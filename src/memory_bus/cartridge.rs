@@ -1,4 +1,4 @@
-use std::fs;
+use std::{fs, time::{SystemTime, Duration}};
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum MapperType {
 	None, MBC1, MBC2, MBC3, MBC5
@@ -23,7 +23,14 @@ pub struct Cartridge {
 	ram_banks: Vec<[u8; 0x2000]>,
 	ram_enable: bool,
 	current_ram_bank: usize,
-	mbc1_banking_mode_select: bool,
+	has_battery: bool,
+	mbc1_banking_mode: bool,
+	mbc3_has_rtc: bool,
+	mbc3_rtc_last_update_epoch: SystemTime,
+	mbc3_rtc_registers: [Duration; 2],
+	mbc3_rtc_latch_prev_value: u8,
+	mbc3_rtc_is_latched: bool,
+	mbc3_rtc_is_halted: bool,
 	mbc5_9th_rom_bank_bit: usize
 }
 
@@ -45,7 +52,14 @@ impl Cartridge {
 				ram_banks: Vec::new(),
 				ram_enable: false,
 				current_ram_bank: 0x00,
-				mbc1_banking_mode_select: false,
+				has_battery: false,
+				mbc1_banking_mode: false,
+				mbc3_has_rtc: false,
+				mbc3_rtc_registers: [Duration::from_secs(0); 2],
+				mbc3_rtc_last_update_epoch: SystemTime::UNIX_EPOCH,
+				mbc3_rtc_latch_prev_value: 0xFF,
+				mbc3_rtc_is_latched: false,
+				mbc3_rtc_is_halted: false,
 				mbc5_9th_rom_bank_bit: 0x00
 			}
 		}
@@ -58,6 +72,14 @@ impl Cartridge {
 			0x0F..=0x13 =>	MapperType::MBC3,
 			0x19..=0x1E => MapperType::MBC5,
 			_ => MapperType::None
+		};
+		let mbc3_has_rtc = match rom_contents[0x147] {
+			0x0F | 0x10 => true,
+			_ => false
+		};
+		let has_battery = match rom_contents[0x147] {
+			0x03 | 0x06 | 0x09 | 0x0D | 0x0F | 0x10 | 0x13 | 0x1B | 0x1E => true,
+			_ => false 
 		};
 		let rom_type = match rom_contents[0x148] {
 			0x01 => ROMType::X4_64KiB,
@@ -108,16 +130,42 @@ impl Cartridge {
 			],
 			ram_enable: false,
 			current_ram_bank: 0x00,
-			mbc1_banking_mode_select: false,
+			has_battery,
+			mbc1_banking_mode: false,
+			mbc3_has_rtc,
+			mbc3_rtc_last_update_epoch: SystemTime::UNIX_EPOCH,
+			mbc3_rtc_registers: [Duration::from_secs(0); 2],
+			mbc3_rtc_latch_prev_value: 0xFF,
+			mbc3_rtc_is_latched: false,
+			mbc3_rtc_is_halted: false,
 			mbc5_9th_rom_bank_bit: 0x00
 		})
 	}
 	pub fn read(&self, address: usize) -> u8 {
 		match address {
-			0x0000..=0x3FFF	=> self.rom_banks[if self.mbc1_banking_mode_select {self.current_ram_bank << 5} else {0}][address],
+			0x0000..=0x3FFF	=> self.rom_banks[if self.mbc1_banking_mode {self.current_ram_bank << 5} else {0}][address],
 			0x4000..=0x7FFF	=> self.rom_banks[if self.mapper_type == MapperType::MBC1 {self.current_ram_bank << 5} else {0} | self.mbc5_9th_rom_bank_bit << 9 | self.current_2d_rom_bank][address - 0x4000],
-			0xA000..=0xBFFF	=> if let RAMType::None = self.ram_type {0xFF} else if !self.ram_enable {0xFF}
-								else {self.ram_banks[if self.mapper_type == MapperType::MBC1 && !self.mbc1_banking_mode_select {0} else {self.current_ram_bank}][(address - 0xA000) % if self.mapper_type == MapperType::MBC2 {0x01FF} else {0x1FFF}]},
+			0xA000..=0xBFFF	=> if (self.ram_type == RAMType::None && !(self.mbc3_has_rtc && self.current_ram_bank >= 0x08)) || !self.ram_enable	{0xFF}
+								else if self.mbc3_has_rtc && self.current_ram_bank >= 0x08 {
+									let elapsed_time = if self.mbc3_rtc_is_halted || self.mbc3_rtc_is_latched {Duration::new(0, 0)} else {self.mbc3_rtc_last_update_epoch.elapsed().expect("Time ran backwards")};
+									match self.current_ram_bank {
+										0x08 => {((self.mbc3_rtc_registers[1] + elapsed_time).as_secs() % 60) as u8}
+										0x09 => {(((self.mbc3_rtc_registers[1] + elapsed_time).as_secs() / 60) % 60) as u8}
+										0x0A => {(((self.mbc3_rtc_registers[1] + elapsed_time).as_secs() / 3600) % 24) as u8}
+										0x0B => {(((self.mbc3_rtc_registers[1] + elapsed_time).as_secs() / 86400) % 256) as u8}
+										_	 => {
+											let nb_256days_periods_elapsed: u64 = (self.mbc3_rtc_registers[1] + elapsed_time).as_secs() / 22118400;
+											(nb_256days_periods_elapsed % 2) as u8 | (self.mbc3_rtc_is_halted as u8) << 6 | if nb_256days_periods_elapsed >= 2 {1} else {0} << 7
+										}
+									}
+								}
+								else { self.ram_banks
+										[
+											if self.mapper_type == MapperType::MBC1 && !self.mbc1_banking_mode {0}
+											else {self.current_ram_bank}
+										]
+										[(address - 0xA000) % if self.mapper_type == MapperType::MBC2 {0x01FF} else {0x1FFF}]
+								},
 			_ => 0
 		}
 	}
@@ -154,12 +202,12 @@ impl Cartridge {
 					}
 					0x6000..=0x7FFF => {
 						if data & 0x01 != 0x00 && (self.ram_type == RAMType::X4_32KiB || self.rom_type == ROMType::X64_1MiB || self.rom_type == ROMType::X128_2MiB) {
-							self.mbc1_banking_mode_select = true
+							self.mbc1_banking_mode = true
 						}
-						else {self.mbc1_banking_mode_select = false}
+						else {self.mbc1_banking_mode = false}
 					}
 					0xA000..=0xBFFF	=> if let RAMType::None = self.ram_type {}
-										else if self.ram_enable {self.ram_banks[if !self.mbc1_banking_mode_select {0} else {self.current_ram_bank}][(address - 0xA000)] = data},
+										else if self.ram_enable {self.ram_banks[if !self.mbc1_banking_mode {0} else {self.current_ram_bank}][(address - 0xA000)] = data},
 					_ => {}
 				}
 			MapperType::MBC2 => {
@@ -181,7 +229,93 @@ impl Cartridge {
 					_ => {}
 				}
 			},
-			MapperType::MBC3 => todo!(),
+			MapperType::MBC3 => {
+				match address {
+					0x0000..=0x1FFF => if data & 0x0F == 0x0A {self.ram_enable = true} else {self.ram_enable = false}
+					0x2000..=0x2FFF => {
+						let mut data = data & 0x7F;
+						if data == 0x00 {data = 0x01}
+						self.current_2d_rom_bank = (data as usize) & match self.rom_type {
+																		ROMType::X2_32KiB	=> 0x01,
+																		ROMType::X4_64KiB	=> 0x03,
+																		ROMType::X8_128KiB	=> 0x07,
+																		ROMType::X16_256KiB	=> 0x0F,
+																		ROMType::X32_512KiB	=> 0x1F,
+																		ROMType::X64_1MiB	=> 0x3F,
+																		_					=> 0x7F
+        															}
+						}
+					0x4000..=0x5FFF => {
+							if data <= 0x03 {
+								self.current_ram_bank = (data as usize) & match self.ram_type {
+																			RAMType::None		=> 0x00,
+																			RAMType::X1_8KiB	=> 0x01,
+																			_					=> 0x03,
+																		}
+							}
+							else if data >= 0x08 && data <= 0x0C && self.mbc3_has_rtc {self.current_ram_bank = data as usize}
+						}
+					0x6000..=0x7FFF => {
+						if !self.mbc3_has_rtc {return}
+						let is_latch_started = self.mbc3_rtc_latch_prev_value == 0x00;
+						self.mbc3_rtc_latch_prev_value = data;
+						if is_latch_started && data == 0x01 {
+							if !self.mbc3_rtc_is_halted {
+								self.mbc3_rtc_registers[0] += self.mbc3_rtc_last_update_epoch.elapsed().expect("Time ran backwards")
+							};
+							self.mbc3_rtc_registers[1] = self.mbc3_rtc_registers[0];
+							self.mbc3_rtc_last_update_epoch = SystemTime::now();
+							self.mbc3_rtc_is_latched = !self.mbc3_rtc_is_latched
+						}
+					}
+					0xA000..=0xBFFF => {
+						if self.ram_enable {
+							if self.ram_type != RAMType::None && self.current_ram_bank < 0x08  {
+								self.ram_banks[self.current_ram_bank][address - 0xA000] = data
+							}
+							else if self.mbc3_has_rtc && self.current_ram_bank >= 0x08 {
+								if !self.mbc3_rtc_is_halted {
+									self.mbc3_rtc_registers[0] += self.mbc3_rtc_last_update_epoch.elapsed().expect("Time ran backwards!");
+								}
+								self.mbc3_rtc_last_update_epoch = SystemTime::now();
+								match self.current_ram_bank {
+									0x08 => {
+										self.mbc3_rtc_registers[0] -= Duration::from_secs(self.mbc3_rtc_registers[0].as_secs() % 60);
+										self.mbc3_rtc_registers[0] += Duration::from_secs(data as u64);
+									}
+									0x09 => {
+										self.mbc3_rtc_registers[0] -= Duration::from_secs((self.mbc3_rtc_registers[0].as_secs() / 60) % 60);
+										self.mbc3_rtc_registers[0] += Duration::from_secs(data as u64 * 60);
+									}
+									0x0A => {
+										self.mbc3_rtc_registers[0] -= Duration::from_secs((self.mbc3_rtc_registers[0].as_secs() / 3600) % 24);
+										self.mbc3_rtc_registers[0] += Duration::from_secs(data as u64 * 3600);
+									}
+									0x0B => {
+										self.mbc3_rtc_registers[0] -= Duration::from_secs((self.mbc3_rtc_registers[0].as_secs() / 86400) % 256);
+										self.mbc3_rtc_registers[0] += Duration::from_secs(data as u64 * 86400);
+									}
+									_ => {
+										let is_carry = data & (1 << 7) != 0;
+										let is_halt = data & (1 << 6) != 0;
+										let data = data & 1;
+										self.mbc3_rtc_registers[0] = Duration::from_secs(self.mbc3_rtc_registers[0].as_secs() % 44236800);
+										self.mbc3_rtc_registers[0] += Duration::from_secs(if is_carry {1} else {0} * 44236800);
+										self.mbc3_rtc_registers[0] -= Duration::from_secs((self.mbc3_rtc_registers[0].as_secs() / 22118400) % 2);
+										self.mbc3_rtc_registers[0] += Duration::from_secs(data as u64 * 22118400);
+										if is_halt {self.mbc3_rtc_is_halted = true} else {self.mbc3_rtc_is_halted = false}
+									}
+								}
+								if !self.mbc3_rtc_is_latched {
+									self.mbc3_rtc_registers[1] = self.mbc3_rtc_registers[0];
+								}
+
+							}
+						}
+					}
+					_ => {}
+				}
+			}
 			MapperType::MBC5 => {
 				match address {
 					0x0000..=0x1FFF => if data & 0x0F == 0x0A {self.ram_enable = true} else {self.ram_enable = false}
@@ -211,8 +345,7 @@ impl Cartridge {
 																	}
 						}
 					}
-					0xA000..=0xBFFF => if let RAMType::None = self.ram_type {}
-						else if self.ram_enable {self.ram_banks[self.current_ram_bank][address - 0xA000] = data}
+					0xA000..=0xBFFF => if self.ram_type != RAMType::None && self.ram_enable {self.ram_banks[self.current_ram_bank][address - 0xA000] = data}
 					_ => {}
 				}
 			},
