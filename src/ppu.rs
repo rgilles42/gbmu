@@ -38,7 +38,7 @@ pub struct Ppu {
 	ppu_mode: PPUModes,
 	palette_translation: HashMap<PixelColour, u32>,
 
-	current_line_obj_rows: Vec<(usize, TileRow, bool)>,
+	current_line_obj_rows: Vec<(usize, TileRow, bool, bool)>,
 
 	oam_dma_count: usize,
 
@@ -139,7 +139,8 @@ impl Ppu {
 						self.current_line_obj_rows.push(
 							(	examined_obj.pos_x as usize, 
 								if examined_obj.is_x_flipped {row.reverse(); row} else {row},
-								examined_obj.is_using_obp1	)
+								examined_obj.is_using_obp1,
+								examined_obj.is_under_bg_win	)
 						);
 					}
 					if !memory_bus.ppu_memory.double_heigth_obj && line + 8 < obj_bottom_line_plus_1 && line + 16 >= obj_bottom_line_plus_1 {
@@ -149,7 +150,8 @@ impl Ppu {
 						self.current_line_obj_rows.push(
 							(	examined_obj.pos_x as usize, 
 								if examined_obj.is_x_flipped {row.reverse(); row} else {row},
-								examined_obj.is_using_obp1	)
+								examined_obj.is_using_obp1,
+								examined_obj.is_under_bg_win	)
 						);
 					}
 				}
@@ -161,31 +163,46 @@ impl Ppu {
 				}
 				if count < VIEWPORT_PX_WIDTH {
 					if memory_bus.ppu_memory.bg_win_enable {
-						let tile_index = memory_bus.ppu_memory.get_bg_tile_index(memory_bus.ppu_memory.scx_ram.overflowing_add(count as u8).0 / 8, memory_bus.ppu_memory.scy_ram.overflowing_add(line).0 / 8);
-						let tile = memory_bus.ppu_memory.get_bg_win_tile(tile_index);
-						let pixel = tile[(memory_bus.ppu_memory.scy_ram as usize + line as usize) % 8][(memory_bus.ppu_memory.scx_ram as usize + count) % 8];
-						self.viewport_buffer[(line as usize) * VIEWPORT_PX_WIDTH + count] = match pixel {
-							TilePixel::Zero =>	self.palette_translation[&memory_bus.ppu_memory.bg_palette[0]],
-							TilePixel::One =>	self.palette_translation[&memory_bus.ppu_memory.bg_palette[1]],
-							TilePixel::Two =>	self.palette_translation[&memory_bus.ppu_memory.bg_palette[2]],
-							TilePixel::Three =>	self.palette_translation[&memory_bus.ppu_memory.bg_palette[3]],
+						if memory_bus.ppu_memory.win_enable && line >= memory_bus.ppu_memory.wy_ram && count as u8 + 7 >= memory_bus.ppu_memory.wx_ram {
+							let tile_index = memory_bus.ppu_memory.get_win_tile_index((count as u8 + 7 - memory_bus.ppu_memory.wx_ram) / 8, (line - memory_bus.ppu_memory.wy_ram) / 8);
+							let tile = memory_bus.ppu_memory.get_bg_win_tile(tile_index);
+							let pixel = tile[(line - memory_bus.ppu_memory.wy_ram) as usize % 8][(count + 7 - memory_bus.ppu_memory.wx_ram as usize) % 8];
+							self.viewport_buffer[(line as usize) * VIEWPORT_PX_WIDTH + count] = match pixel {
+								TilePixel::Zero =>	self.palette_translation[&memory_bus.ppu_memory.bg_palette[0]],
+								TilePixel::One =>	self.palette_translation[&memory_bus.ppu_memory.bg_palette[1]],
+								TilePixel::Two =>	self.palette_translation[&memory_bus.ppu_memory.bg_palette[2]],
+								TilePixel::Three =>	self.palette_translation[&memory_bus.ppu_memory.bg_palette[3]],
+							}
+						} else {
+							let tile_index = memory_bus.ppu_memory.get_bg_tile_index(memory_bus.ppu_memory.scx_ram.overflowing_add(count as u8).0 / 8, memory_bus.ppu_memory.scy_ram.overflowing_add(line).0 / 8);
+							let tile = memory_bus.ppu_memory.get_bg_win_tile(tile_index);
+							let pixel = tile[(memory_bus.ppu_memory.scy_ram as usize + line as usize) % 8][(memory_bus.ppu_memory.scx_ram as usize + count) % 8];
+							self.viewport_buffer[(line as usize) * VIEWPORT_PX_WIDTH + count] = match pixel {
+								TilePixel::Zero =>	self.palette_translation[&memory_bus.ppu_memory.bg_palette[0]],
+								TilePixel::One =>	self.palette_translation[&memory_bus.ppu_memory.bg_palette[1]],
+								TilePixel::Two =>	self.palette_translation[&memory_bus.ppu_memory.bg_palette[2]],
+								TilePixel::Three =>	self.palette_translation[&memory_bus.ppu_memory.bg_palette[3]],
+							}
 						};
+						
 					} else {
 						self.viewport_buffer[(line as usize) * VIEWPORT_PX_WIDTH + count] = self.palette_translation[&PixelColour::White];
 					}
 					if memory_bus.ppu_memory.obj_enable {
-						let mut pixel = (TilePixel::Zero, 0);
+						let mut pixel = (TilePixel::Zero, 0, false);
 						for relevant_row in &self.current_line_obj_rows {
 							if count < relevant_row.0 && count + 8 >= relevant_row.0 {
-								pixel = (relevant_row.1[8 - (relevant_row.0 - count)], relevant_row.2 as usize);
+								pixel = (relevant_row.1[8 - (relevant_row.0 - count)], relevant_row.2 as usize, relevant_row.3);
 							}
 						}
-						self.viewport_buffer[(line as usize) * VIEWPORT_PX_WIDTH + count] = match pixel.0 {
-							TilePixel::Zero =>	self.viewport_buffer[(line as usize) * VIEWPORT_PX_WIDTH + count],
-							TilePixel::One =>	self.palette_translation[&memory_bus.ppu_memory.obj_palette[pixel.1][0]],
-							TilePixel::Two =>	self.palette_translation[&memory_bus.ppu_memory.obj_palette[pixel.1][1]],
-							TilePixel::Three =>	self.palette_translation[&memory_bus.ppu_memory.obj_palette[pixel.1][2]],
-						};
+						if !pixel.2 || self.viewport_buffer[(line as usize) * VIEWPORT_PX_WIDTH + count] == self.palette_translation[&memory_bus.ppu_memory.bg_palette[0]] {
+							self.viewport_buffer[(line as usize) * VIEWPORT_PX_WIDTH + count] = match pixel.0 {
+								TilePixel::Zero =>	self.viewport_buffer[(line as usize) * VIEWPORT_PX_WIDTH + count],
+								TilePixel::One =>	self.palette_translation[&memory_bus.ppu_memory.obj_palette[pixel.1][0]],
+								TilePixel::Two =>	self.palette_translation[&memory_bus.ppu_memory.obj_palette[pixel.1][1]],
+								TilePixel::Three =>	self.palette_translation[&memory_bus.ppu_memory.obj_palette[pixel.1][2]],
+							};
+						}
 					}
 				}
 			},
@@ -291,7 +308,7 @@ impl Ppu {
 	pub fn tick(&mut self, memory_bus: &mut MemoryBus) {
 		if memory_bus.ppu_memory.lcd_enable {
 			self.tick_viewport(memory_bus);
-			if let PPUModes::VBlank(153, 4559) = self.ppu_mode  {
+			if let PPUModes::VBlank(_, 0) = self.ppu_mode  {
 				self.update_windows(memory_bus);
 			}
 			self.tick_ppu_mode(memory_bus);
