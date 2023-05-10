@@ -1,4 +1,4 @@
-use std::{fs, time::{SystemTime, Duration}};
+use std::{fs, time::{SystemTime, Duration, UNIX_EPOCH}};
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum MapperType {
 	None, MBC1, MBC2, MBC3, MBC5
@@ -15,6 +15,7 @@ pub enum RAMType {
 }
 
 pub struct Cartridge {
+	path: String,
 	mapper_type: MapperType,
 	rom_type: ROMType,
 	rom_banks: Vec<[u8; 0x4000]>,
@@ -26,12 +27,50 @@ pub struct Cartridge {
 	has_battery: bool,
 	mbc1_banking_mode: bool,
 	mbc3_has_rtc: bool,
-	mbc3_rtc_last_update_epoch: SystemTime,
+	mbc3_rtc_last_update_timestamp: SystemTime,
 	mbc3_rtc_registers: [Duration; 2],
 	mbc3_rtc_latch_prev_value: u8,
 	mbc3_rtc_is_latched: bool,
 	mbc3_rtc_is_halted: bool,
 	mbc5_9th_rom_bank_bit: usize
+}
+
+impl Drop for Cartridge {
+    fn drop(&mut self) {
+        if self.has_battery {
+			let mut sav_contents = Vec::new();
+			if self.ram_type != RAMType::None {
+				if self.mapper_type == MapperType::MBC2 {
+					sav_contents.extend_from_slice(&self.ram_banks[0][0x00..=0x01FF])
+				} else {
+					for bank in &self.ram_banks {
+						sav_contents.extend_from_slice(bank)
+					}
+				}
+			}
+			if self.mbc3_has_rtc {
+				sav_contents.push(((self.mbc3_rtc_registers[0]).as_secs() % 60) as u8);
+				sav_contents.push((((self.mbc3_rtc_registers[0]).as_secs() / 60) % 60) as u8);
+				sav_contents.push((((self.mbc3_rtc_registers[0]).as_secs() / 3600) % 24) as u8);
+				sav_contents.push((((self.mbc3_rtc_registers[0]).as_secs() / 86400) % 256) as u8);
+				let nb_256days_periods_elapsed = (self.mbc3_rtc_registers[0]).as_secs() / 22118400;
+				sav_contents.push((nb_256days_periods_elapsed % 2) as u8 | (self.mbc3_rtc_is_halted as u8) << 6 | if nb_256days_periods_elapsed >= 2 {1} else {0} << 7);
+				sav_contents.push(((self.mbc3_rtc_registers[1]).as_secs() % 60) as u8);
+				sav_contents.push((((self.mbc3_rtc_registers[1]).as_secs() / 60) % 60) as u8);
+				sav_contents.push((((self.mbc3_rtc_registers[1]).as_secs() / 3600) % 24) as u8);
+				sav_contents.push((((self.mbc3_rtc_registers[1]).as_secs() / 86400) % 256) as u8);
+				let nb_256days_periods_elapsed = (self.mbc3_rtc_registers[1]).as_secs() / 22118400;
+				sav_contents.push((nb_256days_periods_elapsed % 2) as u8 | (self.mbc3_rtc_is_halted as u8) << 6 | if nb_256days_periods_elapsed >= 2 {1} else {0} << 7);
+				let unix_timestamp = self.mbc3_rtc_last_update_timestamp.duration_since(UNIX_EPOCH).expect("We are before epoch!").as_secs();
+				for i in 0..=7 {
+					sav_contents.push(((unix_timestamp >> i * 8) & 0xFF) as u8)
+				}
+
+			}
+			let path = self.path.clone() + ".sav";
+			fs::write(path, sav_contents).unwrap_or_default();
+		}
+    }
 }
 
 impl Cartridge {
@@ -44,6 +83,7 @@ impl Cartridge {
 			}
 		} else {
 			Cartridge {
+				path: String::new(),
 				mapper_type: MapperType::None,
 				rom_type: ROMType::X2_32KiB,
 				rom_banks: vec![[0xFF; 0x4000]; 2],
@@ -56,7 +96,7 @@ impl Cartridge {
 				mbc1_banking_mode: false,
 				mbc3_has_rtc: false,
 				mbc3_rtc_registers: [Duration::from_secs(0); 2],
-				mbc3_rtc_last_update_epoch: SystemTime::UNIX_EPOCH,
+				mbc3_rtc_last_update_timestamp: SystemTime::UNIX_EPOCH,
 				mbc3_rtc_latch_prev_value: 0xFF,
 				mbc3_rtc_is_latched: false,
 				mbc3_rtc_is_halted: false,
@@ -114,30 +154,64 @@ impl Cartridge {
 		for (i, byte) in rom_contents.iter().enumerate() {
 			rom_banks[i / 0x4000][i % 0x4000] = *byte;
 		}
-		Ok(Cartridge {
-			mapper_type,
-			rom_type,
-			rom_banks,
-			current_2d_rom_bank: 0x01,
-			ram_type,
-			ram_banks: vec![[0x00; 0x2000]; match ram_type {
+		let mut ram_banks = vec![[0x00; 0x2000]; match ram_type {
 				RAMType::None => 0,
 				RAMType::X1_8KiB => 1,
 				RAMType::X4_32KiB => 4,
 				RAMType::X8_64KiB => 8,
 				RAMType::X16_128KiB => 16,
+			}
+		];
+		let mut mbc3_rtc_registers = [Duration::from_secs(0); 2];
+		let mut mbc3_rtc_is_latched = false;
+		let mut mbc3_rtc_is_halted = false;
+		let mut mbc3_rtc_last_update_timestamp = SystemTime::UNIX_EPOCH;
+		if has_battery {
+			let ram_path = path.to_owned() + ".sav";
+			let ram_contents = fs::read(ram_path).unwrap_or_default();
+			for (i, byte) in ram_contents.iter().enumerate() {
+				if !mbc3_has_rtc || i < ram_contents.len() - 0x12 {
+					ram_banks[i / 0x2000][i % 0x2000] = *byte;
 				}
-			],
+			}
+			if mbc3_has_rtc && ram_contents.len() >= 0x12 {
+				mbc3_rtc_registers[0] +=  Duration::from_secs(ram_contents[ram_contents.len() - 0x12] as u64);
+				mbc3_rtc_registers[0] +=  Duration::from_secs((ram_contents[ram_contents.len() - 0x11] as u64) * 60);
+				mbc3_rtc_registers[0] +=  Duration::from_secs((ram_contents[ram_contents.len() - 0x10] as u64) * 3600);
+				mbc3_rtc_registers[0] +=  Duration::from_secs((ram_contents[ram_contents.len() - 0x0F] as u64) * 86400);
+				mbc3_rtc_registers[0] +=  Duration::from_secs(((ram_contents[ram_contents.len() - 0x0E] & 1 + ram_contents[ram_contents.len() - 0x0E] >> 7)  as u64) * 22118400);
+				mbc3_rtc_is_halted = ram_contents[ram_contents.len() - 0x0E] & (1 << 6) != 0;
+				mbc3_rtc_registers[1] +=  Duration::from_secs(ram_contents[ram_contents.len() - 0x0D] as u64);
+				mbc3_rtc_registers[1] +=  Duration::from_secs((ram_contents[ram_contents.len() - 0x0C] as u64) * 60);
+				mbc3_rtc_registers[1] +=  Duration::from_secs((ram_contents[ram_contents.len() - 0x0B] as u64) * 3600);
+				mbc3_rtc_registers[1] +=  Duration::from_secs((ram_contents[ram_contents.len() - 0x0A] as u64) * 86400);
+				mbc3_rtc_registers[1] +=  Duration::from_secs(((ram_contents[ram_contents.len() - 0x09] & 1 + ram_contents[ram_contents.len() - 0x09] >> 7)  as u64) * 22118400);
+				mbc3_rtc_is_latched = mbc3_rtc_registers[0] != mbc3_rtc_registers[1];
+				let mut last_timestamp = 0 as u64;
+				for i in 0..=7 {
+					last_timestamp += (ram_contents[ram_contents.len() - 0x08 + i] as u64) << (8 * i);
+				}
+				mbc3_rtc_last_update_timestamp += Duration::from_secs(last_timestamp);
+			}
+		}
+		Ok(Cartridge {
+			path: path.to_string(),
+			mapper_type,
+			rom_type,
+			rom_banks,
+			current_2d_rom_bank: 0x01,
+			ram_type,
+			ram_banks,
 			ram_enable: false,
 			current_ram_bank: 0x00,
 			has_battery,
 			mbc1_banking_mode: false,
 			mbc3_has_rtc,
-			mbc3_rtc_last_update_epoch: SystemTime::UNIX_EPOCH,
-			mbc3_rtc_registers: [Duration::from_secs(0); 2],
+			mbc3_rtc_last_update_timestamp,
+			mbc3_rtc_registers,
 			mbc3_rtc_latch_prev_value: 0xFF,
-			mbc3_rtc_is_latched: false,
-			mbc3_rtc_is_halted: false,
+			mbc3_rtc_is_latched,
+			mbc3_rtc_is_halted,
 			mbc5_9th_rom_bank_bit: 0x00
 		})
 	}
@@ -147,15 +221,15 @@ impl Cartridge {
 			0x4000..=0x7FFF	=> self.rom_banks[if self.mapper_type == MapperType::MBC1 {self.current_ram_bank << 5} else {0} | self.mbc5_9th_rom_bank_bit << 9 | self.current_2d_rom_bank][address - 0x4000],
 			0xA000..=0xBFFF	=> if (self.ram_type == RAMType::None && !(self.mbc3_has_rtc && self.current_ram_bank >= 0x08)) || !self.ram_enable	{0xFF}
 								else if self.mbc3_has_rtc && self.current_ram_bank >= 0x08 {
-									let elapsed_time = if self.mbc3_rtc_is_halted || self.mbc3_rtc_is_latched {Duration::new(0, 0)} else {self.mbc3_rtc_last_update_epoch.elapsed().expect("Time ran backwards")};
+									let elapsed_time = if self.mbc3_rtc_is_halted || self.mbc3_rtc_is_latched {Duration::new(0, 0)} else {self.mbc3_rtc_last_update_timestamp.elapsed().expect("Time ran backwards")};
 									match self.current_ram_bank {
 										0x08 => {((self.mbc3_rtc_registers[1] + elapsed_time).as_secs() % 60) as u8}
 										0x09 => {(((self.mbc3_rtc_registers[1] + elapsed_time).as_secs() / 60) % 60) as u8}
 										0x0A => {(((self.mbc3_rtc_registers[1] + elapsed_time).as_secs() / 3600) % 24) as u8}
 										0x0B => {(((self.mbc3_rtc_registers[1] + elapsed_time).as_secs() / 86400) % 256) as u8}
 										_	 => {
-											let nb_256days_periods_elapsed: u64 = (self.mbc3_rtc_registers[1] + elapsed_time).as_secs() / 22118400;
-											(nb_256days_periods_elapsed % 2) as u8 | (self.mbc3_rtc_is_halted as u8) << 6 | if nb_256days_periods_elapsed >= 2 {1} else {0} << 7
+											let nb_256days_periods_elapsed = (self.mbc3_rtc_registers[1] + elapsed_time).as_secs() / 22118400;
+											(if nb_256days_periods_elapsed >= 2 {1} else {0} as u8) << 7 | (self.mbc3_rtc_is_halted as u8) << 6 | (nb_256days_periods_elapsed % 2) as u8
 										}
 									}
 								}
@@ -261,10 +335,10 @@ impl Cartridge {
 						self.mbc3_rtc_latch_prev_value = data;
 						if is_latch_started && data == 0x01 {
 							if !self.mbc3_rtc_is_halted {
-								self.mbc3_rtc_registers[0] += self.mbc3_rtc_last_update_epoch.elapsed().expect("Time ran backwards")
+								self.mbc3_rtc_registers[0] += self.mbc3_rtc_last_update_timestamp.elapsed().expect("Time ran backwards")
 							};
+							self.mbc3_rtc_last_update_timestamp = SystemTime::now();
 							self.mbc3_rtc_registers[1] = self.mbc3_rtc_registers[0];
-							self.mbc3_rtc_last_update_epoch = SystemTime::now();
 							self.mbc3_rtc_is_latched = !self.mbc3_rtc_is_latched
 						}
 					}
@@ -275,9 +349,9 @@ impl Cartridge {
 							}
 							else if self.mbc3_has_rtc && self.current_ram_bank >= 0x08 {
 								if !self.mbc3_rtc_is_halted {
-									self.mbc3_rtc_registers[0] += self.mbc3_rtc_last_update_epoch.elapsed().expect("Time ran backwards!");
+									self.mbc3_rtc_registers[0] += self.mbc3_rtc_last_update_timestamp.elapsed().expect("Time ran backwards!");
 								}
-								self.mbc3_rtc_last_update_epoch = SystemTime::now();
+								self.mbc3_rtc_last_update_timestamp = SystemTime::now();
 								match self.current_ram_bank {
 									0x08 => {
 										self.mbc3_rtc_registers[0] -= Duration::from_secs(self.mbc3_rtc_registers[0].as_secs() % 60);
