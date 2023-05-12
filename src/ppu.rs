@@ -126,6 +126,9 @@ impl Ppu {
 				if count == 0 {
 					memory_bus.ppu_memory.ly_ram = line;
 					memory_bus.ppu_memory.lyc_match_flag = line == memory_bus.ppu_memory.lyc_ram;
+					if memory_bus.ppu_memory.lyc_match_flag && memory_bus.ppu_memory.lyc_interrupt_enable {
+						memory_bus.write_byte(0xFF0F, memory_bus.read_byte(0xFF0F) | (1 << 1));
+					}
 					self.current_line_obj_rows.clear();
 				}
 				if count % 2 == 0 && self.current_line_obj_rows.len() != 10 {
