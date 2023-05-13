@@ -536,8 +536,8 @@ impl Cpu {
 				let res = sp_value.overflowing_add(operand_value).0;
 				self.registers.f.zero = false;
 				self.registers.f.substract = false;
-				self.registers.f.half_carry = (sp_value & 0xFFF) + (operand_value & 0xFFF) >= 0x1000;
-				self.registers.f.carry = res < sp_value;
+				self.registers.f.half_carry = (sp_value & 0xF) + (operand_value & 0xF) >= 0x10;
+				self.registers.f.carry = (sp_value & 0xFF) + (operand_value & 0xFF) >= 0x100;
 				self.registers.set_hl_big_endian(res);
 			}
 			Instruction::PUSH(_, _, target) => {
@@ -556,7 +556,6 @@ impl Cpu {
 			Instruction::ADDAs(_, _, _operand) | Instruction::ADCAs(_, _, _operand) => {
 				let reg_a_content = self.registers.a as u16;
 				let operand_val = self.get_reg_value(memory_bus, _operand) as u16;
-				// if instr is ADC and carry flag is true, let carry = 1;
 				let carry_val = if let Instruction::ADCAs(_, _, _) = instruction {self.registers.f.carry as u16} else {0};
 				let r = reg_a_content + operand_val + carry_val;
 				self.registers.f.zero = r as u8 == 0;
@@ -568,13 +567,12 @@ impl Cpu {
 			Instruction::SUBs(_, _, _operand) | Instruction::SBCAs(_, _, _operand) => {
 				let reg_a_content = self.registers.a as u16;
 				let operand_val = self.get_reg_value(memory_bus, _operand) as u16;
-				// if instr is ADC and carry flag is true, let carry = 1;
 				let carry_val = if let Instruction::SBCAs(_, _, _) = instruction {self.registers.f.carry as u16} else {0};
 				let r = reg_a_content.overflowing_sub(operand_val + carry_val).0;
 				self.registers.f.zero = r as u8 == 0;
 				self.registers.f.substract = true;
-				self.registers.f.half_carry = (reg_a_content & 0xF).overflowing_sub(carry_val).0 < (operand_val & 0xF);	// carry val is subs befor comp, from what I got of the nintendo manual
-				self.registers.f.carry = r & 0x100 != 0; 					// reg_a_content < operand + carry; In unsigned logic, a borrow from the next unset bit sets it
+				self.registers.f.half_carry = reg_a_content & 0xF < (operand_val & 0xF) + carry_val;
+				self.registers.f.carry = r & 0x100 != 0;
 				self.registers.a = r as u8;
 			}
 			Instruction::ANDs(_, _, _operand) => {
@@ -746,9 +744,10 @@ impl Cpu {
 				self.set_reg_value(memory_bus, target, reg_content as u8);
 			}
 			Instruction::RL(_, _, target) => {
-				let mut reg_content = (self.get_reg_value(memory_bus, target) as u16) << 1;
-				reg_content += if self.registers.f.carry {1} else {0};
-				self.registers.f.carry = (reg_content & 0x0100) != 0;
+				let mut reg_content = self.get_reg_value(memory_bus, target);
+				let had_carry = self.registers.f.carry as u8;
+				self.registers.f.carry = (reg_content & 0x80) != 0;
+				reg_content = had_carry | (reg_content << 1);
 				self.registers.f.zero = reg_content == 0;
 				self.registers.f.substract = false;
 				self.registers.f.half_carry = false;
@@ -767,17 +766,19 @@ impl Cpu {
 				self.set_reg_value(memory_bus, target, (reg_content >> 8) as u8);
 			}
 			Instruction::RR(_, _, target) => {
-				let mut reg_content = (self.get_reg_value(memory_bus, target) as u16) << 7;
-				reg_content += if self.registers.f.carry {0x8000} else {0};
-				self.registers.f.carry = (reg_content & 0x0080) != 0;
+				let mut reg_content = self.get_reg_value(memory_bus, target);
+				let had_carry = (self.registers.f.carry as u8) << 7;
+				self.registers.f.carry = (reg_content & 0x01) != 0;
+				reg_content = had_carry | (reg_content >> 1);
 				self.registers.f.zero = reg_content == 0;
 				self.registers.f.substract = false;
 				self.registers.f.half_carry = false;
-				self.set_reg_value(memory_bus, target, (reg_content >> 8) as u8);
+				self.set_reg_value(memory_bus, target, reg_content as u8);
 			}
 			Instruction::SLA(_, _, target) => {
-				let reg_content = (self.get_reg_value(memory_bus, target) as u16) << 1;
-				self.registers.f.carry = (reg_content & 0x0100) != 0;
+				let mut reg_content = self.get_reg_value(memory_bus, target);
+				self.registers.f.carry = (reg_content & 0x80) != 0;
+				reg_content = reg_content << 1;
 				self.registers.f.zero = reg_content == 0;
 				self.registers.f.substract = false;
 				self.registers.f.half_carry = false;
@@ -786,24 +787,29 @@ impl Cpu {
 			Instruction::SWAP(_, _, target) => {
 				let reg_content = self.get_reg_value(memory_bus, target);
 				let reg_content = reg_content << 4 | reg_content >> 4;
+				self.registers.f.zero = reg_content == 0;
+				self.registers.f.substract = false;
+				self.registers.f.half_carry = false;
+				self.registers.f.carry = false;
 				self.set_reg_value(memory_bus, target, reg_content);
 			}
 			Instruction::SRA(_, _, target) => {
-				let mut reg_content = (self.get_reg_value(memory_bus, target) as u16) << 7;
-				reg_content |= (reg_content & 0x4000) << 1;
-				self.registers.f.carry = (reg_content & 0x0080) != 0;
+				let mut reg_content = self.get_reg_value(memory_bus, target);
+				self.registers.f.carry = (reg_content & 0x01) != 0;
+				reg_content = (reg_content & 0x80) | (reg_content >> 1);
 				self.registers.f.zero = reg_content == 0;
 				self.registers.f.substract = false;
 				self.registers.f.half_carry = false;
-				self.set_reg_value(memory_bus, target, (reg_content >> 8) as u8);
+				self.set_reg_value(memory_bus, target, reg_content as u8);
 			}
 			Instruction::SRL(_, _, target) => {
-				let reg_content = (self.get_reg_value(memory_bus, target) as u16) << 7;
-				self.registers.f.carry = (reg_content & 0x0080) != 0;
+				let mut reg_content = self.get_reg_value(memory_bus, target);
+				self.registers.f.carry = (reg_content & 0x01) != 0;
+				reg_content = reg_content >> 1;
 				self.registers.f.zero = reg_content == 0;
 				self.registers.f.substract = false;
 				self.registers.f.half_carry = false;
-				self.set_reg_value(memory_bus, target, (reg_content >> 8) as u8);
+				self.set_reg_value(memory_bus, target, reg_content as u8);
 			}
 			Instruction::BIT(_, _, pos, target) => {
 				self.registers.f.substract = false;
