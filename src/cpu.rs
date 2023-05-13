@@ -6,7 +6,7 @@ use registers::Registers;
 use crate::memory_bus::MemoryBus;
 use instructions::Instruction;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CpuState{
 	Running, Halted, Stopped
 }
@@ -45,11 +45,20 @@ impl Cpu {
 		self.get_nb_clock_current_op()
 	}
 	fn fetch_next_opcode(&mut self, memory_bus: &MemoryBus) {
-		if self.ime_set && memory_bus.read_byte(0xFFFF) & memory_bus.read_byte(0xFF0F) & 0x1F != 0 
+		if memory_bus.read_byte(0xFFFF) & memory_bus.read_byte(0xFF0F) & 0x1F != 0 && (self.ime_set || self.state == CpuState::Halted) 
 		{
-			self.next_op = Some(Instruction::ISR(0, 20));
+			self.state = CpuState::Running;
+			if self.ime_set {
+				self.next_op = Some(Instruction::ISR(0, 20));
+			} else {
+				self.next_op = Instruction::from_opcode(self.fetch_pc(memory_bus), self, memory_bus);
+			}
 		} else {
-			self.next_op = Instruction::from_opcode(self.fetch_pc(memory_bus), self, memory_bus);
+			if self.state == CpuState::Halted {
+				self.next_op = Some(Instruction::NOP(0, 1));
+			} else {
+				self.next_op = Instruction::from_opcode(self.fetch_pc(memory_bus), self, memory_bus);
+			}
 		}
 	}
 	fn exec_current_op(&mut self, memory_bus: &mut MemoryBus) {
@@ -131,6 +140,6 @@ impl Cpu {
 
 impl Debug for Cpu {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Cpu").field("regs", &self.registers).field("op", &self.next_op).finish()
+        f.debug_struct("Cpu").field("regs", &self.registers).field("op", &self.next_op).field("ime_set", &self.ime_set).finish()
     }
 }
