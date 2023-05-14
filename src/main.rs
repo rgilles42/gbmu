@@ -30,7 +30,7 @@ fn main() -> Result<(), Error> {
 	let mut main_input = WinitInputHelper::new();
 	windows.insert(WindowTypes::Main, 
 		{
-			let size = LogicalSize::new(VIEWPORT_PX_WIDTH as f64, VIEWPORT_PX_HEIGHT as f64);
+			let size = LogicalSize::new(VIEWPORT_PX_WIDTH as f64 * 4.0, VIEWPORT_PX_HEIGHT as f64 * 4.0);
 			WindowBuilder::new()
 				.with_title("GBMU")
 				.with_inner_size(size)
@@ -42,7 +42,7 @@ fn main() -> Result<(), Error> {
 	pixels.insert(windows[&WindowTypes::Main].id(),
 		{
 			let window_size = windows[&WindowTypes::Main].inner_size();
-			let surface_texture = SurfaceTexture::new(window_size.width * 4, window_size.height * 4, &windows[&WindowTypes::Main]);
+			let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &windows[&WindowTypes::Main]);
 			Pixels::new(VIEWPORT_PX_WIDTH as u32, VIEWPORT_PX_HEIGHT as u32, surface_texture)?
 		}
 	);
@@ -108,33 +108,35 @@ fn main() -> Result<(), Error> {
             }
 			if disp_tilemap && windows.len() != 1 + disp_tilemap as usize + disp_tileset as usize {
 				windows.insert(WindowTypes::Tilemap, {
-					let size = LogicalSize::new(TILEMAP_PX_WIDTH as f64, TILEMAP_PX_HEIGHT as f64);
+					let size = LogicalSize::new(TILEMAP_PX_WIDTH as f64 * 2.0, TILEMAP_PX_HEIGHT as f64 * 2.0);
 					WindowBuilder::new()
 						.with_title("Tilemap")
 						.with_inner_size(size)
 						.with_min_inner_size(size)
+						.with_resizable(false)
 						.build(&event_loop)
 						.unwrap()
 				});
 				pixels.insert(windows[&WindowTypes::Tilemap].id(), {
 					let window_size = windows[&WindowTypes::Tilemap].inner_size();
-					let surface_texture = SurfaceTexture::new(window_size.width * 4, window_size.height * 4, &windows[&WindowTypes::Tilemap]);
+					let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &windows[&WindowTypes::Tilemap]);
 					Pixels::new(TILEMAP_PX_WIDTH as u32, TILEMAP_PX_HEIGHT as u32, surface_texture).unwrap()
 				});
 			}
 			if disp_tileset && windows.len() != 1 + disp_tilemap as usize + disp_tileset as usize {
 				windows.insert(WindowTypes::Tileset, {
-					let size = LogicalSize::new(TILESET_VIEWER_PX_WIDTH as f64, TILESET_VIEWER_PX_HEIGHT as f64);
+					let size = LogicalSize::new(TILESET_VIEWER_PX_WIDTH as f64 * 4.0, TILESET_VIEWER_PX_HEIGHT as f64 * 4.0);
 					WindowBuilder::new()
 						.with_title("Tileset")
 						.with_inner_size(size)
 						.with_min_inner_size(size)
+						.with_resizable(false)
 						.build(&event_loop)
 						.unwrap()
 				});
 				pixels.insert(windows[&WindowTypes::Tileset].id(), {
 					let window_size = windows[&WindowTypes::Tileset].inner_size();
-					let surface_texture = SurfaceTexture::new(window_size.width * 4, window_size.height * 4, &windows[&WindowTypes::Tileset]);
+					let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &windows[&WindowTypes::Tileset]);
 					Pixels::new(TILESET_VIEWER_PX_WIDTH as u32, TILESET_VIEWER_PX_HEIGHT as u32, surface_texture).unwrap()
 				});
 			}
