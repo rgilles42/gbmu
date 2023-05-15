@@ -4,8 +4,11 @@ mod ppu;
 mod input;
 mod timer;
 
+mod gui;
+
 use std::collections::HashMap;
 use std::env::args;
+use gui::Framework;
 use pixels::{Error, Pixels, SurfaceTexture};
 use winit::dpi::LogicalSize;
 use winit::event::{Event, VirtualKeyCode, WindowEvent};
@@ -46,6 +49,17 @@ fn main() -> Result<(), Error> {
 			Pixels::new(VIEWPORT_PX_WIDTH as u32, VIEWPORT_PX_HEIGHT as u32, surface_texture)?
 		}
 	);
+	let mut framework = {
+		let window_size = windows[&WindowTypes::Main].inner_size();
+		let scale_factor = windows[&WindowTypes::Main].scale_factor() as f32;
+		Framework::new(
+            &event_loop,
+            window_size.width,
+            window_size.height,
+            scale_factor,
+            &pixels[&windows[&WindowTypes::Main].id()],
+        )
+	};
 	let mut memory_bus = MemoryBus::new(args().collect::<Vec<String>>().get(1).map(|str| str.as_str()));
 	let mut cpu = Cpu::new();
 	let mut ppu = Ppu::new();
@@ -60,39 +74,56 @@ fn main() -> Result<(), Error> {
 	memory_bus.load_dmg_bootrom();
 	cpu.tick(&mut memory_bus);									// "Virtual" tick to realise first PC pointee byte fetch; no operation is executed
 	event_loop.run(move |event, event_loop, control_flow| {
-		if let Event::RedrawRequested(win_id) = event {
-			if win_id != windows[&WindowTypes::Main].id() {
-				let win = windows.iter().find(| (_, win) | win.id() == win_id).map(| (win_type, _) | *win_type);
-				if let Some(win_type) = win {
-					match win_type {
-						WindowTypes::Tileset => {ppu.update_tileset_win(&mut memory_bus, pixels.get_mut(&win_id).unwrap().frame_mut())}
-						WindowTypes::Tilemap => {ppu.update_tilemap_win(&mut memory_bus, pixels.get_mut(&win_id).unwrap().frame_mut())}
-						_ => {}
-					}
-				}
-			}
-            if let Err(err) = pixels[&win_id].render() {
-                println!("Window {:?}: pixels.render: {}", win_id, err);
-                *control_flow = ControlFlow::Exit;
-                return;
-            }
-        }
-		if let Event::WindowEvent { window_id, event } = &event {
-			if window_id != &windows[&WindowTypes::Main].id() {
-				if event == &WindowEvent::CloseRequested {
-					let win = windows.iter().find(| (_, win) | win.id() == *window_id).map(| (win_type, _) | *win_type);
-					if let Some(win_type) = win {
-						windows.remove(&win_type);
-						pixels.remove(window_id);
-						match win_type {
-							WindowTypes::Tileset => {disp_tileset = false}
-							WindowTypes::Tilemap => {disp_tilemap = false}
-							_ => {}
+		match &event {
+			Event::WindowEvent { window_id, event } => {
+				if window_id == &windows[&WindowTypes::Main].id() {
+					framework.handle_event(&event);
+				} else {
+					if event == &WindowEvent::CloseRequested {
+						let win = windows.iter().find(| (_, win) | win.id() == *window_id).map(| (win_type, _) | *win_type);
+						if let Some(win_type) = win {
+							windows.remove(&win_type);
+							pixels.remove(window_id);
+							match win_type {
+								WindowTypes::Tileset => {disp_tileset = false}
+								WindowTypes::Tilemap => {disp_tilemap = false}
+								_ => {}
+							}
 						}
 					}
+					return;
 				}
-				return;
 			}
+			Event::RedrawRequested(win_id) => {
+				let render_result;
+				let win = windows.iter().find(| (_, win) | win.id() == *win_id).map(| (win_type, _) | *win_type);
+				if let Some(win_type) = win {
+					match win_type {
+						WindowTypes::Tileset => {
+							ppu.update_tileset_win(&mut memory_bus, pixels.get_mut(win_id).unwrap().frame_mut());
+							render_result = pixels[&win_id].render();
+						}
+						WindowTypes::Tilemap => {
+							ppu.update_tilemap_win(&mut memory_bus, pixels.get_mut(win_id).unwrap().frame_mut());
+							render_result = pixels[&win_id].render();
+						}
+						WindowTypes::Main => {
+							framework.prepare(&windows[&WindowTypes::Main]);
+							render_result = pixels[&win_id].render_with(|encoder, render_target, context| {
+								context.scaling_renderer.render(encoder, render_target);
+								framework.render(encoder, render_target, context);
+								Ok(())
+							});
+						}
+					}
+					if let Err(err) = render_result {
+						println!("Window {:?}: pixels.render: {}", win_id, err);
+						*control_flow = ControlFlow::Exit;
+						return;
+					}
+				}
+			}
+			_ => {}
 		}
 		if main_input.update(&event) {
 			if main_input.key_pressed(VirtualKeyCode::Escape) || main_input.close_requested() || main_input.destroyed() { // || nb_ticks > 23579000 // || cpu.registers.program_counter - 1 == 0xFFFF
@@ -166,6 +197,5 @@ fn main() -> Result<(), Error> {
 				windows[&WindowTypes::Tileset].request_redraw();
 			}
 		}
-
 	});
 }
