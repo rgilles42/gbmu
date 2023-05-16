@@ -68,9 +68,6 @@ fn main() -> Result<(), Error> {
 	let mut nb_ticks = 0;
 	let mut debug_enabled = false;
 
-	let mut disp_tilemap = true;
-	let mut disp_tileset = true;
-
 	memory_bus.load_dmg_bootrom();
 	cpu.tick(&mut memory_bus);									// "Virtual" tick to realise first PC pointee byte fetch; no operation is executed
 	event_loop.run(move |event, event_loop, control_flow| {
@@ -85,8 +82,8 @@ fn main() -> Result<(), Error> {
 							windows.remove(&win_type);
 							pixels.remove(window_id);
 							match win_type {
-								WindowTypes::Tileset => {disp_tileset = false}
-								WindowTypes::Tilemap => {disp_tilemap = false}
+								WindowTypes::Tileset => {framework.gui.disp_tileset = false}
+								WindowTypes::Tilemap => {framework.gui.disp_tilemap = false}
 								_ => {}
 							}
 						}
@@ -137,7 +134,7 @@ fn main() -> Result<(), Error> {
                     return;
                 }
             }
-			if disp_tilemap && windows.len() != 1 + disp_tilemap as usize + disp_tileset as usize {
+			if framework.gui.disp_tilemap && windows.len() != 1 + framework.gui.disp_tilemap as usize + framework.gui.disp_tileset as usize {
 				windows.insert(WindowTypes::Tilemap, {
 					let size = LogicalSize::new(TILEMAP_PX_WIDTH as f64 * 2.0, TILEMAP_PX_HEIGHT as f64 * 2.0);
 					WindowBuilder::new()
@@ -154,7 +151,7 @@ fn main() -> Result<(), Error> {
 					Pixels::new(TILEMAP_PX_WIDTH as u32, TILEMAP_PX_HEIGHT as u32, surface_texture).unwrap()
 				});
 			}
-			if disp_tileset && windows.len() != 1 + disp_tilemap as usize + disp_tileset as usize {
+			if framework.gui.disp_tileset && windows.len() != 1 + framework.gui.disp_tilemap as usize + framework.gui.disp_tileset as usize {
 				windows.insert(WindowTypes::Tileset, {
 					let size = LogicalSize::new(TILESET_VIEWER_PX_WIDTH as f64 * 4.0, TILESET_VIEWER_PX_HEIGHT as f64 * 4.0);
 					WindowBuilder::new()
@@ -190,10 +187,10 @@ fn main() -> Result<(), Error> {
 				nb_ticks += nb_cycles as u64;
 			}
 			windows[&WindowTypes::Main].request_redraw();
-			if disp_tilemap {
+			if framework.gui.disp_tilemap {
 				windows[&WindowTypes::Tilemap].request_redraw();
 			}
-			if disp_tileset {
+			if framework.gui.disp_tileset {
 				windows[&WindowTypes::Tileset].request_redraw();
 			}
 		}
