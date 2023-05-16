@@ -1,4 +1,4 @@
-use egui::{ClippedPrimitive, Context, TexturesDelta};
+use egui::{ClippedPrimitive, Context, TexturesDelta, ColorImage, TextureOptions};
 use egui_wgpu::renderer::{Renderer, ScreenDescriptor};
 use pixels::{wgpu, PixelsContext};
 use winit::event::WindowEvent;
@@ -26,6 +26,7 @@ impl Framework {
 		height: u32,
 		scale_factor: f32,
 		pixels: &pixels::Pixels,
+		program_icon_rgba: Option<(Vec<u8>, u32, u32)>
 	) -> Self {
 		let max_texture_size = pixels.device().limits().max_texture_dimension_2d as usize;
 
@@ -39,7 +40,7 @@ impl Framework {
 		};
 		let renderer = Renderer::new(pixels.device(), pixels.render_texture_format(), None, 1);
 		let textures = TexturesDelta::default();
-		let gui = Gui::new();
+		let gui = Gui::new(program_icon_rgba);
 
 		Self {
 			egui_ctx,
@@ -127,21 +128,22 @@ impl Framework {
 	}
 }
 
-/// Example application state. A real application will need a lot more state than this.
 pub struct Gui {
 	pub disp_tileset: bool,
 	pub disp_tilemap: bool,
-	/// Only show the egui window when true.
 	window_open: bool,
+	program_icon_image: Option<egui::ColorImage>,
+	program_icon: Option<egui::TextureHandle>
 }
 
 impl Gui {
-	/// Create a `Gui`.
-	fn new() -> Self {
+	fn new(program_icon_rgba: Option<(Vec<u8>, u32, u32)>) -> Self {
 		Self {
 			disp_tileset: false,
 			disp_tilemap: false,
-			window_open: false
+			window_open: false,
+			program_icon_image: program_icon_rgba.map(|program_icon_rgba| ColorImage::from_rgba_unmultiplied([program_icon_rgba.1 as usize, program_icon_rgba.2 as usize], &program_icon_rgba.0)),
+			program_icon: None
 		}
 	}
 
@@ -151,6 +153,11 @@ impl Gui {
 			egui::menu::bar(ui, |ui| {
 				ui.menu_button("File", |ui| {
 					if ui.button("About...").clicked() {
+						if let Some(image) = self.program_icon_image.clone() {
+							self.program_icon.get_or_insert_with(|| {
+								ui.ctx().load_texture("program_logo", image, TextureOptions { magnification: egui::TextureFilter::Nearest, minification: egui::TextureFilter::Nearest })
+							});
+						}
 						self.window_open = true;
 						ui.close_menu();
 					}
@@ -171,15 +178,28 @@ impl Gui {
 		egui::Window::new("About GBMU")
 			.open(&mut self.window_open)
 			.show(ctx, |ui| {
-				ui.label("Thank you for using GBMU!");
-				ui.label("A quick and dirty, yet featureful GameBoy emulator written in Rust for educational purposes.");
-
+				ui.vertical_centered(|ui| {
+					if let Some(texture) = &self.program_icon {
+						ui.image(texture, texture.size_vec2() * 2.0);
+					}
+				});
+				ui.add_space(5.0);
+				ui.label("A quick and dirty, yet featureful GameBoy emulator written in Rust for educational purposes, as part of a 42 School project.");
 				ui.separator();
-
 				ui.horizontal(|ui| {
 					ui.spacing_mut().item_spacing.x /= 2.0;
-					ui.label("© 2023 - rgilles");
-					ui.hyperlink("https://github.com/rgilles42/gbmu");
+					ui.label("By Raphaël Gilles (rgilles) & Mederic Martinet (memartin) -");
+					ui.hyperlink("github.com/rgilles42/gbmu");
+				});
+				ui.horizontal(|ui| {
+					ui.spacing_mut().item_spacing.x /= 2.0;
+					ui.label("Original logo art by RetroPunkZ -");
+					ui.hyperlink("twitter.com/RetroPunkZ1");
+				});
+				ui.horizontal(|ui| {
+					ui.spacing_mut().item_spacing.x /= 2.0;
+					ui.label("This software is licensed under the GPL-3.0 License. See");
+					ui.hyperlink("www.gnu.org/licenses/gpl-3.0.html");
 				});
 			});
 	}

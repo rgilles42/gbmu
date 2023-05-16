@@ -13,7 +13,7 @@ use pixels::{Error, Pixels, SurfaceTexture};
 use winit::dpi::LogicalSize;
 use winit::event::{Event, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
-use winit::window::WindowBuilder;
+use winit::window::{WindowBuilder, Icon};
 use winit_input_helper::WinitInputHelper;
 
 use cpu::Cpu;
@@ -21,16 +21,30 @@ use memory_bus::MemoryBus;
 use ppu::{Ppu, VIEWPORT_PX_WIDTH, VIEWPORT_PX_HEIGHT, TILEMAP_PX_HEIGHT, TILEMAP_PX_WIDTH, TILESET_VIEWER_PX_WIDTH, TILESET_VIEWER_PX_HEIGHT};
 use timer::Timer;
 
+const ICON_PATH: &str = "assets/gbmu.bmp";
+
 #[derive(PartialEq, Eq, Hash, Debug, Clone, Copy)]
 enum WindowTypes {
 	Main, Tileset, Tilemap
 }
 
 fn main() -> Result<(), Error> {
+	let program_icon_rgba = {
+		let image = image::open(ICON_PATH);
+		if let Ok(image_contents) = image {
+			let image = image_contents.into_rgba8();
+			let image_dims = image.dimensions();
+			Some((image.into_raw(), image_dims.0, image_dims.1))
+		} else {
+			None
+		}
+	};
 	let event_loop = EventLoop::new();
 	let mut windows = HashMap::new();
 	let mut pixels = HashMap::new();
 	let mut main_input = WinitInputHelper::new();
+	let window_icon = program_icon_rgba.clone().map(|image| Icon::from_rgba(image.0, image.1, image.2));
+	let window_icon = if let Some(Ok(icon)) = window_icon {Some(icon)} else {None};
 	windows.insert(WindowTypes::Main, 
 		{
 			let size = LogicalSize::new(VIEWPORT_PX_WIDTH as f64 * 4.0, VIEWPORT_PX_HEIGHT as f64 * 4.0);
@@ -38,6 +52,7 @@ fn main() -> Result<(), Error> {
 				.with_title("GBMU")
 				.with_inner_size(size)
 				.with_min_inner_size(size)
+				.with_window_icon(window_icon.clone())
 				.build(&event_loop)
 				.unwrap()
 		}
@@ -58,6 +73,7 @@ fn main() -> Result<(), Error> {
             window_size.height,
             scale_factor,
             &pixels[&windows[&WindowTypes::Main].id()],
+			program_icon_rgba
         )
 	};
 	let mut memory_bus = MemoryBus::new(args().collect::<Vec<String>>().get(1).map(|str| str.as_str()));
@@ -142,6 +158,7 @@ fn main() -> Result<(), Error> {
 						.with_inner_size(size)
 						.with_min_inner_size(size)
 						.with_resizable(false)
+						.with_window_icon(window_icon.clone())
 						.build(&event_loop)
 						.unwrap()
 				});
@@ -159,6 +176,7 @@ fn main() -> Result<(), Error> {
 						.with_inner_size(size)
 						.with_min_inner_size(size)
 						.with_resizable(false)
+						.with_window_icon(window_icon.clone())
 						.build(&event_loop)
 						.unwrap()
 				});
