@@ -176,31 +176,32 @@ impl Gui {
 		});
 
 		egui::Window::new("About GBMU")
-			.open(&mut self.window_open)
-			.show(ctx, |ui| {
-				ui.vertical_centered(|ui| {
-					if let Some(texture) = &self.program_icon {
-						ui.image(texture, texture.size_vec2() * 2.0);
-					}
-				});
-				ui.add_space(5.0);
-				ui.label("A quick and dirty, yet featureful GameBoy emulator written in Rust for educational purposes, as part of a 42 School project.");
-				ui.separator();
-				ui.horizontal(|ui| {
-					ui.spacing_mut().item_spacing.x /= 2.0;
-					ui.label("By Raphaël Gilles (rgilles) & Mederic Martinet (memartin) -");
-					ui.hyperlink("github.com/rgilles42/gbmu");
-				});
-				ui.horizontal(|ui| {
-					ui.spacing_mut().item_spacing.x /= 2.0;
-					ui.label("Original logo art by RetroPunkZ -");
-					ui.hyperlink("twitter.com/RetroPunkZ1");
-				});
-				ui.horizontal(|ui| {
-					ui.spacing_mut().item_spacing.x /= 2.0;
-					ui.label("This software is licensed under the GPL-3.0 License. See");
-					ui.hyperlink("www.gnu.org/licenses/gpl-3.0.html");
-				});
+		.open(&mut self.window_open)
+		.auto_sized()
+		.show(ctx, |ui| {
+			ui.vertical_centered(|ui| {
+				if let Some(texture) = &self.program_icon {
+					ui.image(texture, texture.size_vec2() * 2.0);
+				}
 			});
+			ui.add_space(5.0);
+			ui.label("A quick and dirty, yet featureful GameBoy emulator written in Rust for educational purposes, as part of a 42 School project.");
+			ui.horizontal(|ui| {
+				ui.spacing_mut().item_spacing.x /= 2.0;
+				ui.label("This software is licensed under the GPL-3.0 License. See");
+				ui.hyperlink("www.gnu.org/licenses/gpl-3.0.html");
+			});
+			ui.separator();
+			ui.horizontal(|ui| {
+				ui.spacing_mut().item_spacing.x /= 2.0;
+				ui.label("By Raphaël Gilles (rgilles) & Mederic Martinet (memartin) -");
+				ui.hyperlink("github.com/rgilles42/gbmu");
+			});
+			ui.horizontal(|ui| {
+				ui.spacing_mut().item_spacing.x /= 2.0;
+				ui.label("Original logo art by RetroPunkZ -");
+				ui.hyperlink("twitter.com/RetroPunkZ1");
+			});
+		});
 	}
 }
