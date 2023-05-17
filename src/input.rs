@@ -9,8 +9,8 @@ pub fn tick(memory_bus: &mut MemoryBus, input: &WinitInputHelper) {
 		is_right_pressed: input.key_held(winit::event::VirtualKeyCode::D),
 		is_a_pressed: input.key_held(winit::event::VirtualKeyCode::Backslash),
 		is_b_pressed: input.key_held(winit::event::VirtualKeyCode::Return),
-		is_start_pressed: input.key_held(winit::event::VirtualKeyCode::Space),
-		is_select_pressed: input.key_held(winit::event::VirtualKeyCode::LShift),
+		is_start_pressed: input.key_held(winit::event::VirtualKeyCode::LShift),
+		is_select_pressed: input.key_held(winit::event::VirtualKeyCode::Space),
 	};
 	memory_bus.input_memory.update(&input_state)
 }
