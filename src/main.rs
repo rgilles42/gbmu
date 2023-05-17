@@ -47,11 +47,10 @@ fn main() -> Result<(), Error> {
 	let window_icon = if let Some(Ok(icon)) = window_icon {Some(icon)} else {None};
 	windows.insert(WindowTypes::Main, 
 		{
-			let size = LogicalSize::new(VIEWPORT_PX_WIDTH as f64 * 4.0, VIEWPORT_PX_HEIGHT as f64 * 4.0);
 			WindowBuilder::new()
 				.with_title("GBMU")
-				.with_inner_size(size)
-				.with_min_inner_size(size)
+				.with_inner_size(LogicalSize::new(VIEWPORT_PX_WIDTH as f64 * 4.0, VIEWPORT_PX_HEIGHT as f64 * 4.0 + 50.0))
+				.with_min_inner_size(LogicalSize::new(VIEWPORT_PX_WIDTH as f64, VIEWPORT_PX_HEIGHT as f64 + 50.0))
 				.with_window_icon(window_icon.clone())
 				.build(&event_loop)
 				.unwrap()

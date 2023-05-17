@@ -167,6 +167,10 @@ impl Gui {
 						self.open_file_dialog = Some(dialog);
 						ui.close_menu();
 					}
+					if ui.button("Reset").clicked() {
+						self.reset_requested = true;
+						ui.close_menu();
+					}
 					if ui.button("About GBMU").clicked() {
 						if let Some(image) = self.program_icon_image.clone() {
 							self.program_icon.get_or_insert_with(|| {
