@@ -201,7 +201,7 @@ fn main() -> Result<(), Error> {
 					cpu.tick(memory_bus.as_mut().unwrap());
 				}
 			} else {
-				while !frame_completed {
+				while !frame_completed && !framework.gui.is_execution_paused {
 					if nb_ticks >= 25030750 {
 						debug_enabled = false;
 					}

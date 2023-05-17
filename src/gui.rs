@@ -132,7 +132,7 @@ impl Framework {
 }
 
 pub enum EmulationTarget {
-	Auto, DMG, GBC
+	Auto//, DMG, GBC
 }
 
 pub struct Gui {
@@ -144,7 +144,8 @@ pub struct Gui {
 	pub opened_file: Option<PathBuf>,
   	open_file_dialog: Option<FileDialog>,
 	pub reset_requested: bool,
-	pub selcted_emulation_target: EmulationTarget
+	pub selcted_emulation_target: EmulationTarget,
+	pub is_execution_paused: bool
 }
 
 impl Gui {
@@ -158,7 +159,8 @@ impl Gui {
 			opened_file: None,
 			open_file_dialog: None,
 			reset_requested: false,
-			selcted_emulation_target: EmulationTarget::Auto
+			selcted_emulation_target: EmulationTarget::Auto,
+			is_execution_paused: false
 		}
 	}
 
@@ -175,6 +177,10 @@ impl Gui {
 					}
 					if ui.button("Reset").clicked() {
 						self.reset_requested = true;
+						ui.close_menu();
+					}
+					if ui.button(if self.is_execution_paused {"Resume"} else {"Pause"}).clicked() {
+						self.is_execution_paused = !self.is_execution_paused;
 						ui.close_menu();
 					}
 					if ui.button("About GBMU").clicked() {
@@ -226,7 +232,7 @@ impl Gui {
 			ui.separator();
 			ui.horizontal(|ui| {
 				ui.spacing_mut().item_spacing.x /= 2.0;
-				ui.label("By Raphaël Gilles (rgilles) -");
+				ui.label("By Raphaël Gilles (rgilles) & Mederic Martinet (memartin) -");
 				ui.hyperlink("https://github.com/rgilles42/gbmu");
 			});
 			ui.horizontal(|ui| {
