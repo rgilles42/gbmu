@@ -8,6 +8,7 @@ mod gui;
 
 use std::collections::HashMap;
 use std::env::args;
+use std::time::{Instant, Duration};
 use gui::Framework;
 use pixels::{Error, Pixels, SurfaceTexture};
 use winit::dpi::LogicalSize;
@@ -83,6 +84,8 @@ fn main() -> Result<(), Error> {
 
 	let mut nb_ticks = 0;
 	let mut debug_enabled = false;
+	let mut next_redraw = Instant::now() + Duration::from_micros(16665);
+	let mut frame_completed = false;
 
 	memory_bus.load_dmg_bootrom();
 	cpu.tick(&mut memory_bus);									// "Virtual" tick to realise first PC pointee byte fetch; no operation is executed
@@ -127,6 +130,8 @@ fn main() -> Result<(), Error> {
 								framework.render(encoder, render_target, context);
 								Ok(())
 							});
+							next_redraw = Instant::now() + Duration::from_micros(16665);
+							frame_completed = false;
 						}
 					}
 					if let Err(err) = render_result {
@@ -186,9 +191,8 @@ fn main() -> Result<(), Error> {
 					Pixels::new(TILESET_VIEWER_PX_WIDTH as u32, TILESET_VIEWER_PX_HEIGHT as u32, surface_texture).unwrap()
 				});
 			}
-			let mut frame_completed = false;
 			while !frame_completed {
-				if nb_ticks >= 25030750 {//cpu.registers.program_counter - 1 == 0xc370 {	
+				if nb_ticks >= 25030750 {
 					debug_enabled = false;
 				}
 				if debug_enabled {
@@ -204,12 +208,14 @@ fn main() -> Result<(), Error> {
 				}
 				nb_ticks += nb_cycles as u64;
 			}
-			windows[&WindowTypes::Main].request_redraw();
-			if framework.gui.disp_tilemap {
-				windows[&WindowTypes::Tilemap].request_redraw();
-			}
-			if framework.gui.disp_tileset {
-				windows[&WindowTypes::Tileset].request_redraw();
+			if Instant::now() >= next_redraw {
+				windows[&WindowTypes::Main].request_redraw();
+				if framework.gui.disp_tilemap {
+					windows[&WindowTypes::Tilemap].request_redraw();
+				}
+				if framework.gui.disp_tileset {
+					windows[&WindowTypes::Tileset].request_redraw();
+				}
 			}
 		}
 	});
