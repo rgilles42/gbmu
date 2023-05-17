@@ -7,7 +7,6 @@ mod timer;
 mod gui;
 
 use std::collections::HashMap;
-use std::env::args;
 use std::time::{Instant, Duration};
 use gui::Framework;
 use pixels::{Error, Pixels, SurfaceTexture};
@@ -77,7 +76,7 @@ fn main() -> Result<(), Error> {
 			program_icon_rgba
         )
 	};
-	let mut memory_bus = MemoryBus::new(args().collect::<Vec<String>>().get(1).map(|str| str.as_str()));
+	let mut memory_bus: Option<MemoryBus> = None;
 	let mut cpu = Cpu::new();
 	let mut ppu = Ppu::new();
 	let mut timer = Timer::new();
@@ -86,9 +85,7 @@ fn main() -> Result<(), Error> {
 	let mut debug_enabled = false;
 	let mut next_redraw = Instant::now() + Duration::from_micros(16665);
 	let mut frame_completed = false;
-
-	memory_bus.load_dmg_bootrom();
-	cpu.tick(&mut memory_bus);									// "Virtual" tick to realise first PC pointee byte fetch; no operation is executed
+									// "Virtual" tick to realise first PC pointee byte fetch; no operation is executed
 	event_loop.run(move |event, event_loop, control_flow| {
 		match &event {
 			Event::WindowEvent { window_id, event } => {
@@ -116,11 +113,11 @@ fn main() -> Result<(), Error> {
 				if let Some(win_type) = win {
 					match win_type {
 						WindowTypes::Tileset => {
-							ppu.update_tileset_win(&mut memory_bus, pixels.get_mut(win_id).unwrap().frame_mut());
+							ppu.update_tileset_win(memory_bus.as_mut().unwrap(), pixels.get_mut(win_id).unwrap().frame_mut());
 							render_result = pixels[&win_id].render();
 						}
 						WindowTypes::Tilemap => {
-							ppu.update_tilemap_win(&mut memory_bus, pixels.get_mut(win_id).unwrap().frame_mut());
+							ppu.update_tilemap_win(memory_bus.as_mut().unwrap(), pixels.get_mut(win_id).unwrap().frame_mut());
 							render_result = pixels[&win_id].render();
 						}
 						WindowTypes::Main => {
@@ -191,22 +188,37 @@ fn main() -> Result<(), Error> {
 					Pixels::new(TILESET_VIEWER_PX_WIDTH as u32, TILESET_VIEWER_PX_HEIGHT as u32, surface_texture).unwrap()
 				});
 			}
-			while !frame_completed {
-				if nb_ticks >= 25030750 {
-					debug_enabled = false;
+			if framework.gui.reset_requested {
+				memory_bus = None;
+				cpu = Cpu::new();
+				ppu = Ppu::new();
+				timer = Timer::new();
+				framework.gui.reset_requested = false;
+			}
+			if let None = &memory_bus {
+				if let Some(path) = &framework.gui.opened_file {
+					memory_bus = Some(MemoryBus::new(path.to_str()));
+					memory_bus.as_mut().unwrap().load_dmg_bootrom();
+					cpu.tick(memory_bus.as_mut().unwrap());
 				}
-				if debug_enabled {
-					println!("{:x?}", cpu);
-					println!("Tick count: {}", nb_ticks);
-					std::thread::sleep(std::time::Duration::from_millis(500))
+			} else {
+				while !frame_completed {
+					if nb_ticks >= 25030750 {
+						debug_enabled = false;
+					}
+					if debug_enabled {
+						println!("{:x?}", cpu);
+						println!("Tick count: {}", nb_ticks);
+						std::thread::sleep(std::time::Duration::from_millis(500))
+					}
+					let nb_cycles = cpu.tick(memory_bus.as_mut().unwrap());
+					input::tick(memory_bus.as_mut().unwrap(), &main_input);
+					for _ in 0..nb_cycles {
+						frame_completed |= ppu.tick(memory_bus.as_mut().unwrap(), pixels.get_mut(&windows[&WindowTypes::Main].id()).unwrap().frame_mut());
+						timer.tick(memory_bus.as_mut().unwrap());
+					}
+					nb_ticks += nb_cycles as u64;
 				}
-				let nb_cycles = cpu.tick(&mut memory_bus);
-				input::tick(&mut memory_bus, &main_input);
-				for _ in 0..nb_cycles {
-					frame_completed |= ppu.tick(&mut memory_bus, pixels.get_mut(&windows[&WindowTypes::Main].id()).unwrap().frame_mut());
-					timer.tick(&mut memory_bus);
-				}
-				nb_ticks += nb_cycles as u64;
 			}
 			if Instant::now() >= next_redraw {
 				windows[&WindowTypes::Main].request_redraw();

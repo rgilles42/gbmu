@@ -1,4 +1,7 @@
+use std::path::PathBuf;
+
 use egui::{ClippedPrimitive, Context, TexturesDelta, ColorImage, TextureOptions};
+use egui_file::FileDialog;
 use egui_wgpu::renderer::{Renderer, ScreenDescriptor};
 use pixels::{wgpu, PixelsContext};
 use winit::event::WindowEvent;
@@ -133,7 +136,10 @@ pub struct Gui {
 	pub disp_tilemap: bool,
 	window_open: bool,
 	program_icon_image: Option<egui::ColorImage>,
-	program_icon: Option<egui::TextureHandle>
+	program_icon: Option<egui::TextureHandle>,
+	pub opened_file: Option<PathBuf>,
+  	open_file_dialog: Option<FileDialog>,
+	pub reset_requested: bool
 }
 
 impl Gui {
@@ -143,7 +149,10 @@ impl Gui {
 			disp_tilemap: false,
 			window_open: false,
 			program_icon_image: program_icon_rgba.map(|program_icon_rgba| ColorImage::from_rgba_unmultiplied([program_icon_rgba.1 as usize, program_icon_rgba.2 as usize], &program_icon_rgba.0)),
-			program_icon: None
+			program_icon: None,
+			opened_file: None,
+			open_file_dialog: None,
+			reset_requested: false
 		}
 	}
 
@@ -152,7 +161,13 @@ impl Gui {
 		egui::TopBottomPanel::top("menubar_container").show(ctx, |ui| {
 			egui::menu::bar(ui, |ui| {
 				ui.menu_button("File", |ui| {
-					if ui.button("About...").clicked() {
+					if ui.button("Load ROM").clicked() {
+						let mut dialog = FileDialog::open_file(self.opened_file.clone());
+						dialog.open();
+						self.open_file_dialog = Some(dialog);
+						ui.close_menu();
+					}
+					if ui.button("About GBMU").clicked() {
 						if let Some(image) = self.program_icon_image.clone() {
 							self.program_icon.get_or_insert_with(|| {
 								ui.ctx().load_texture("program_logo", image, TextureOptions { magnification: egui::TextureFilter::Nearest, minification: egui::TextureFilter::Nearest })
@@ -174,7 +189,14 @@ impl Gui {
 				});
 			});
 		});
-
+		if let Some(dialog) = &mut self.open_file_dialog {
+			if dialog.show(ctx).selected() {
+				if let Some(file) = dialog.path() {
+					self.opened_file = Some(file);
+					self.reset_requested = true;
+				};
+			}
+		}
 		egui::Window::new("About GBMU")
 		.open(&mut self.window_open)
 		.auto_sized()

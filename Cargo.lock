@@ -529,6 +529,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "egui_file"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ea53f834204e28899d702422a5b30e41eadab52384e6d4113e7842b6798b8fe4"
+dependencies = [
+ "egui",
+]
+
+[[package]]
 name = "either"
 version = "1.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -669,6 +678,7 @@ dependencies = [
  "egui",
  "egui-wgpu",
  "egui-winit",
+ "egui_file",
  "image",
  "pixels",
  "winit",
