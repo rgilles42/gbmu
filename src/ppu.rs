@@ -42,7 +42,7 @@ impl Ppu {
 	pub fn new() -> Ppu {
 		let ppu = Ppu {
 			ppu_mode: PPUModes::OAMSearch(0, 0),
-			palette_translation: HashMap::from([(PixelColour::White, [0xFF, 0xFF, 0xFF, 0xFF]), (PixelColour::LightGray, [0xA9, 0xA9, 0xA9, 0xFF]), (PixelColour::DarkGray, [0x54, 0x54, 0x54, 0xFF]), (PixelColour::Black, [0x00, 0x00, 0x00, 0xFF])]),
+			palette_translation: HashMap::from([(PixelColour::White, [0xFF, 0xFF, 0xFF, 0xFF]), (PixelColour::LightGray, [0xAA, 0xAA, 0xAA, 0xFF]), (PixelColour::DarkGray, [0x55, 0x55, 0x55, 0xFF]), (PixelColour::Black, [0x00, 0x00, 0x00, 0xFF])]),
 			current_line_obj_rows: Vec::new(),
 			oam_dma_count: 0,
 		};

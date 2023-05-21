@@ -112,11 +112,15 @@ fn main() -> Result<(), Error> {
 				if let Some(win_type) = win {
 					match win_type {
 						WindowTypes::Tileset => {
-							ppu.update_tileset_win(memory_bus.as_mut().unwrap(), pixels.get_mut(win_id).unwrap().frame_mut());
+							if let Some(memory_bus) = &mut memory_bus {
+								ppu.update_tileset_win(memory_bus, pixels.get_mut(win_id).unwrap().frame_mut());
+							}
 							render_result = pixels[&win_id].render();
 						}
 						WindowTypes::Tilemap => {
-							ppu.update_tilemap_win(memory_bus.as_mut().unwrap(), pixels.get_mut(win_id).unwrap().frame_mut());
+							if let Some(memory_bus) = &mut memory_bus {
+								ppu.update_tilemap_win(memory_bus, pixels.get_mut(win_id).unwrap().frame_mut());
+							}
 							render_result = pixels[&win_id].render();
 						}
 						WindowTypes::Main => {
