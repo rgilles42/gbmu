@@ -49,19 +49,20 @@ impl InputMemory {
 	}
 	pub fn read(&self) -> u8 {
 		let mut res = (self.is_reading_action_buttons as u8) << 5 | (self.is_reading_direction_buttons as u8) << 4;
-		if self.is_reading_action_buttons {
+		if self.is_reading_action_buttons && !self.is_reading_direction_buttons {
 			res |= (!self.joypad_state.is_start_pressed as u8)	<< 3
 				| (!self.joypad_state.is_select_pressed as u8)	<< 2
 				| (!self.joypad_state.is_b_pressed as u8)		<< 1
 				| (!self.joypad_state.is_a_pressed as u8);
 
-		};
-		if self.is_reading_direction_buttons {
+		} else if self.is_reading_direction_buttons && !self.is_reading_action_buttons {
 			res |= (!self.joypad_state.is_down_pressed as u8)	<< 3
 				| (!self.joypad_state.is_up_pressed as u8)		<< 2
 				| (!self.joypad_state.is_left_pressed as u8)	<< 1
 				| (!self.joypad_state.is_right_pressed as u8);
-		};
+		} else {
+			res |= 0x0F
+		}
 		res
 	}
 	pub fn update(&mut self, input_state: &InputState) {
