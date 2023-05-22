@@ -194,6 +194,7 @@ impl Cartridge {
 				mbc3_rtc_last_update_timestamp += Duration::from_secs(last_timestamp);
 			}
 		}
+		println!("Loaded cartridge {:?}, {:?}, {:?}, {:?}", mapper_type, rom_type, ram_type, has_battery);
 		Ok(Cartridge {
 			path: path.to_string(),
 			mapper_type,
@@ -255,7 +256,7 @@ impl Cartridge {
 			MapperType::MBC1 =>
 				match address {
 					0x0000..=0x1FFF => if data & 0x0F == 0x0A {self.ram_enable = true} else {self.ram_enable = false}
-					0x2000..=0x2FFF => {
+					0x2000..=0x3FFF => {
 						let mut data = data & 0x1F;
 						if data == 0x00 {data = 0x01}
 						self.current_2d_rom_bank = (data as usize) & match self.rom_type {
