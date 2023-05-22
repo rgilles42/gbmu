@@ -26,6 +26,7 @@ pub struct Cartridge {
 	current_ram_bank: usize,
 	has_battery: bool,
 	mbc1_banking_mode: bool,
+	mbc1_current_rom_banks_upper_bytes: usize,
 	mbc3_has_rtc: bool,
 	mbc3_rtc_last_update_timestamp: SystemTime,
 	mbc3_rtc_registers: [Duration; 2],
@@ -94,6 +95,7 @@ impl Cartridge {
 				current_ram_bank: 0x00,
 				has_battery: false,
 				mbc1_banking_mode: false,
+				mbc1_current_rom_banks_upper_bytes: 0x00,
 				mbc3_has_rtc: false,
 				mbc3_rtc_registers: [Duration::from_secs(0); 2],
 				mbc3_rtc_last_update_timestamp: SystemTime::UNIX_EPOCH,
@@ -194,7 +196,6 @@ impl Cartridge {
 				mbc3_rtc_last_update_timestamp += Duration::from_secs(last_timestamp);
 			}
 		}
-		println!("Loaded cartridge {:?}, {:?}, {:?}, {:?}", mapper_type, rom_type, ram_type, has_battery);
 		Ok(Cartridge {
 			path: path.to_string(),
 			mapper_type,
@@ -207,6 +208,7 @@ impl Cartridge {
 			current_ram_bank: 0x00,
 			has_battery,
 			mbc1_banking_mode: false,
+			mbc1_current_rom_banks_upper_bytes: 0x00,
 			mbc3_has_rtc,
 			mbc3_rtc_last_update_timestamp,
 			mbc3_rtc_registers,
@@ -218,8 +220,8 @@ impl Cartridge {
 	}
 	pub fn read(&self, address: usize) -> u8 {
 		match address {
-			0x0000..=0x3FFF	=> self.rom_banks[if self.mbc1_banking_mode {self.current_ram_bank << 5} else {0}][address],
-			0x4000..=0x7FFF	=> self.rom_banks[if self.mapper_type == MapperType::MBC1 {self.current_ram_bank << 5} else {0} | self.mbc5_9th_rom_bank_bit << 9 | self.current_2d_rom_bank][address - 0x4000],
+			0x0000..=0x3FFF	=> self.rom_banks[if self.mbc1_banking_mode {self.mbc1_current_rom_banks_upper_bytes << 5} else {0}][address],
+			0x4000..=0x7FFF	=> self.rom_banks[self.mbc5_9th_rom_bank_bit << 9 | self.mbc1_current_rom_banks_upper_bytes << 5 | self.current_2d_rom_bank][address - 0x4000],
 			0xA000..=0xBFFF	=> if (self.ram_type == RAMType::None && !(self.mbc3_has_rtc && self.current_ram_bank >= 0x08)) || !self.ram_enable	{0xFF}
 								else if self.mbc3_has_rtc && self.current_ram_bank >= 0x08 {
 									let elapsed_time = if self.mbc3_rtc_is_halted || self.mbc3_rtc_is_latched {Duration::new(0, 0)} else {self.mbc3_rtc_last_update_timestamp.elapsed().expect("Time ran backwards")};
@@ -268,11 +270,14 @@ impl Cartridge {
         															}
 						}
 					0x4000..=0x5FFF => {
-						let data = data & 0x03;
-						if data >= 0x02 && (self.ram_type == RAMType::X4_32KiB || self.rom_type == ROMType::X128_2MiB) 
-						|| data == 0x01 && (self.ram_type == RAMType::X4_32KiB || self.rom_type == ROMType::X64_1MiB || self.rom_type == ROMType::X128_2MiB)
-						|| data == 0x00 {
-							self.current_ram_bank = data as usize;
+						self.current_ram_bank = data as usize & match self.ram_type {
+							RAMType::X4_32KiB => 0x03,
+							_ => 0x00
+						};
+						self.mbc1_current_rom_banks_upper_bytes = data as usize & match self.rom_type {
+							ROMType::X128_2MiB => 0x03,
+							ROMType::X64_1MiB => 0x01,
+							_ => 0x00					
 						}
 					}
 					0x6000..=0x7FFF => {
