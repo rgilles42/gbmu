@@ -264,7 +264,7 @@ impl PPUMemory {
 		}
 		let tile_reg = if tile_index >= 128 {tile_index -= 128; 1} else {0};
 		if self.double_heigth_obj {
-			self.tiles[tile_reg][if tile_index < 8 {tile_index} else {tile_index + 1} as usize][line_index as usize % 8]
+			self.tiles[tile_reg][if line_index < 8 {tile_index} else {tile_index + 1} as usize][line_index as usize % 8]
 		} else {
 			self.tiles[tile_reg][tile_index as usize][line_index as usize]
 		}
