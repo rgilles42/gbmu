@@ -240,7 +240,7 @@ impl Ppu {
 					}
 					if memory_bus.ppu_memory.obj_enable {
 						let mut pixel = (TilePixel::Zero, 0, false);
-						for relevant_row in &self.current_line_obj_rows {
+						for relevant_row in self.current_line_obj_rows.iter().rev() {
 							if count < relevant_row.0 && count + 8 >= relevant_row.0 {
 								let pixel_value = relevant_row.1[8 - (relevant_row.0 - count)];
 								if pixel_value != TilePixel::Zero {
