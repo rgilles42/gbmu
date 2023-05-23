@@ -52,7 +52,7 @@ mod tests {
 
 	#[test]
 	fn test_timer() {
-		let mut memory_bus = MemoryBus::new(None);
+		let mut memory_bus = MemoryBus::new(None, false);
 		let mut timer = Timer::new();
 		println!("DIV is {:x}, TIMA is {:x}", memory_bus.timer_memory.read(0xFF04), memory_bus.timer_memory.read(0xFF05));
 		for _ in 0..0x100 {

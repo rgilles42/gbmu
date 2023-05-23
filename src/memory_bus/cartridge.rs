@@ -33,7 +33,9 @@ pub struct Cartridge {
 	mbc3_rtc_latch_prev_value: u8,
 	mbc3_rtc_is_latched: bool,
 	mbc3_rtc_is_halted: bool,
-	mbc5_9th_rom_bank_bit: usize
+	mbc5_9th_rom_bank_bit: usize,
+
+	pub is_cgb: bool
 }
 
 impl Drop for Cartridge {
@@ -102,7 +104,8 @@ impl Cartridge {
 				mbc3_rtc_latch_prev_value: 0xFF,
 				mbc3_rtc_is_latched: false,
 				mbc3_rtc_is_halted: false,
-				mbc5_9th_rom_bank_bit: 0x00
+				mbc5_9th_rom_bank_bit: 0x00,
+				is_cgb: false
 			}
 		}
 	}
@@ -141,6 +144,7 @@ impl Cartridge {
 			0x05 => RAMType::X8_64KiB,
 			_ => if mapper_type == MapperType::MBC2 {RAMType::X1_8KiB} else {RAMType::None}
 		};
+		let is_cgb = rom_contents[0x143] & 0x8F == 0x80;
 		let mut rom_banks = vec![[0xFF; 0x4000]; match rom_type {
 				ROMType::X2_32KiB =>	0x02,
 				ROMType::X4_64KiB =>	0x04,
@@ -215,7 +219,8 @@ impl Cartridge {
 			mbc3_rtc_latch_prev_value: 0xFF,
 			mbc3_rtc_is_latched,
 			mbc3_rtc_is_halted,
-			mbc5_9th_rom_bank_bit: 0x00
+			mbc5_9th_rom_bank_bit: 0x00,
+			is_cgb
 		})
 	}
 	pub fn read(&self, address: usize) -> u8 {

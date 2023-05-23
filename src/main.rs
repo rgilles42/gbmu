@@ -200,8 +200,7 @@ fn main() -> Result<(), Error> {
 			}
 			if let None = &memory_bus {
 				if let Some(path) = &framework.gui.opened_file {
-					memory_bus = Some(MemoryBus::new(path.to_str()));
-					memory_bus.as_mut().unwrap().load_dmg_bootrom();
+					memory_bus = Some(MemoryBus::new(path.to_str(), framework.gui.force_dmg));
 					cpu.tick(memory_bus.as_mut().unwrap());
 				}
 			} else {

@@ -1007,7 +1007,7 @@ mod tests {
 	}
 	#[test]
 	fn test_arith() {
-		let mut memory_bus = MemoryBus::new(None);
+		let mut memory_bus = MemoryBus::new(None, false);
 		let mut my_cpu = Cpu::new();
 		my_cpu.registers.program_counter = 0xC000;
 		test_adds(&mut my_cpu, &mut memory_bus, 0x12, 0x24, 0x00.into());

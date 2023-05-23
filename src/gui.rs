@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use egui::{ClippedPrimitive, Context, TexturesDelta, ColorImage, TextureOptions};
+use egui::{ClippedPrimitive, Context, TexturesDelta, ColorImage, TextureOptions, Button};
 use egui_file::FileDialog;
 use egui_wgpu::renderer::{Renderer, ScreenDescriptor};
 use pixels::{wgpu, PixelsContext};
@@ -131,10 +131,6 @@ impl Framework {
 	}
 }
 
-pub enum EmulationTarget {
-	Auto//, DMG, GBC
-}
-
 pub struct Gui {
 	pub disp_tileset: bool,
 	pub disp_tilemap: bool,
@@ -144,7 +140,7 @@ pub struct Gui {
 	pub opened_file: Option<PathBuf>,
   	open_file_dialog: Option<FileDialog>,
 	pub reset_requested: bool,
-	pub selcted_emulation_target: EmulationTarget,
+	pub force_dmg: bool,
 	pub is_execution_paused: bool
 }
 
@@ -159,7 +155,7 @@ impl Gui {
 			opened_file: None,
 			open_file_dialog: None,
 			reset_requested: false,
-			selcted_emulation_target: EmulationTarget::Auto,
+			force_dmg: false,
 			is_execution_paused: false
 		}
 	}
@@ -179,17 +175,15 @@ impl Gui {
 						self.reset_requested = true;
 						ui.close_menu();
 					}
+				});
+				ui.menu_button("Emulation", |ui| {
 					if ui.button(if self.is_execution_paused {"Resume"} else {"Pause"}).clicked() {
 						self.is_execution_paused = !self.is_execution_paused;
 						ui.close_menu();
 					}
-					if ui.button("About GBMU").clicked() {
-						if let Some(image) = self.program_icon_image.clone() {
-							self.program_icon.get_or_insert_with(|| {
-								ui.ctx().load_texture("program_logo", image, TextureOptions { magnification: egui::TextureFilter::Nearest, minification: egui::TextureFilter::Nearest })
-							});
-						}
-						self.window_open = true;
+					ui.separator();
+					if ui.add(Button::new("Force DMG").shortcut_text(if self.force_dmg {"√"} else {""})).clicked() {
+						self.force_dmg = !self.force_dmg;
 						ui.close_menu();
 					}
 				});
@@ -200,6 +194,17 @@ impl Gui {
 					}
 					if ui.button("Open tilemap viewer").clicked() {
 						self.disp_tilemap = true;
+						ui.close_menu();
+					}
+				});
+				ui.menu_button("About", |ui| {
+					if ui.button("About GBMU").clicked() {
+						if let Some(image) = self.program_icon_image.clone() {
+							self.program_icon.get_or_insert_with(|| {
+								ui.ctx().load_texture("program_logo", image, TextureOptions { magnification: egui::TextureFilter::Nearest, minification: egui::TextureFilter::Nearest })
+							});
+						}
+						self.window_open = true;
 						ui.close_menu();
 					}
 				});
