@@ -241,7 +241,7 @@ impl Cartridge {
 											if self.mapper_type == MapperType::MBC1 && !self.mbc1_banking_mode {0}
 											else {self.current_ram_bank}
 										]
-										[(address - 0xA000) % if self.mapper_type == MapperType::MBC2 {0x01FF} else {0x1FFF}]
+										[(address - 0xA000) % if self.mapper_type == MapperType::MBC2 {0x0200} else {0x2000}]
 								},
 			_ => 0
 		}
@@ -293,9 +293,9 @@ impl Cartridge {
 			MapperType::MBC2 => {
 				match address {
 					0x0000..=0x3FFF => {
+						let mut data = data & 0x0F;
 						if address & 0x0100 == 0 {if data == 0x0A {self.ram_enable = true} else {self.ram_enable = false}}
 						else {
-							let mut data = data & 0x0F;
 							if data == 0x00 {data = 0x01}
 							self.current_2d_rom_bank = (data as usize) & match self.rom_type {
 																			ROMType::X2_32KiB	=> 0x01,
@@ -305,7 +305,7 @@ impl Cartridge {
 																		};
 						}
 					}
-					0xA000..=0xBFFF => if self.ram_enable {self.ram_banks[0][(address - 0xA000) % 0x01FF] = data}
+					0xA000..=0xBFFF => if self.ram_enable {self.ram_banks[0][(address - 0xA000) % 0x0200] = data}
 					_ => {}
 				}
 			},
