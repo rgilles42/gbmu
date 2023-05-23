@@ -51,6 +51,7 @@ pub struct PPUMemory {
 	pub scx_ram: u8,						// 0xFF43
 	pub ly_ram: u8,							// 0xFF44
 	pub lyc_ram: u8,						// 0xFF45
+	pub oam_dma_reg: u8,					// 0xFF46
 	bgp_ram: u8,							// 0xFF47
 	obp_ram: [u8; 2],						// 0xFF48 - 0xFF49
 	pub wy_ram: u8,							// 0xFF4A
@@ -90,6 +91,7 @@ impl PPUMemory {
 			scx_ram: 0,
 			ly_ram: 0,
 			lyc_ram: 0,
+			oam_dma_reg: 0x00,
 			bgp_ram: 0,
 			obp_ram: [0; 2],
 			wy_ram: 0,
