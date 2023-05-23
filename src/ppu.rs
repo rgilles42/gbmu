@@ -41,7 +41,7 @@ pub struct Ppu {
 impl Ppu {
 	pub fn new() -> Ppu {
 		let ppu = Ppu {
-			ppu_mode: PPUModes::OAMSearch(0, 0),
+			ppu_mode: PPUModes::VBlank(153, 4559),
 			palette_translation: HashMap::from([(PixelColour::White, [0xFF, 0xFF, 0xFF, 0xFF]), (PixelColour::LightGray, [0xAA, 0xAA, 0xAA, 0xFF]), (PixelColour::DarkGray, [0x55, 0x55, 0x55, 0xFF]), (PixelColour::Black, [0x00, 0x00, 0x00, 0xFF])]),
 			current_line_obj_rows: Vec::new(),
 			oam_dma_count: 0,
@@ -240,7 +240,7 @@ impl Ppu {
 					}
 					if memory_bus.ppu_memory.obj_enable {
 						let mut pixel = (TilePixel::Zero, 0, false);
-						for relevant_row in &self.current_line_obj_rows {
+						for relevant_row in self.current_line_obj_rows.iter().rev() {
 							if count < relevant_row.0 && count + 8 >= relevant_row.0 {
 								let pixel_value = relevant_row.1[8 - (relevant_row.0 - count)];
 								if pixel_value != TilePixel::Zero {
@@ -290,7 +290,7 @@ impl Ppu {
 			self.tick_ppu_mode(memory_bus);
 		}
 		else {
-			self.ppu_mode = PPUModes::OAMSearch(0, 0)
+			self.ppu_mode = PPUModes::VBlank(153, 4559)
 		}
 		if memory_bus.oam_dma_reg != 0x00 {
 			self.tick_oam_dma(memory_bus);
