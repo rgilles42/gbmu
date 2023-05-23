@@ -144,7 +144,7 @@ impl Cartridge {
 			0x05 => RAMType::X8_64KiB,
 			_ => if mapper_type == MapperType::MBC2 {RAMType::X1_8KiB} else {RAMType::None}
 		};
-		let is_cgb = rom_contents[0x143] & 0x8F == 0x80;
+		let is_cgb = rom_contents[0x143] & 0x80 != 0x00;
 		let mut rom_banks = vec![[0xFF; 0x4000]; match rom_type {
 				ROMType::X2_32KiB =>	0x02,
 				ROMType::X4_64KiB =>	0x04,

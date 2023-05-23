@@ -79,7 +79,7 @@ impl Ppu {
 		for y in 0..TILEMAP_NB_TILES_HEIGHT {
 			for x in 0..TILEMAP_NB_TILES_WIDTH {
 				let tile_index = memory_bus.ppu_memory.get_bg_tile_index(x as u8, y as u8);
-				let tile = memory_bus.ppu_memory.get_bg_win_tile(tile_index);
+				let tile = memory_bus.ppu_memory.get_bg_win_tile(tile_index, false);
 				for (row_index, row) in tile.iter().enumerate() {
 					for (pixel_index, pixel) in row.iter().enumerate() {
 						let tilemap_pixel_pos = y * TILEMAP_PX_WIDTH * TILE_HEIGHT +
@@ -183,7 +183,8 @@ impl Ppu {
 					let obj_bottom_line_plus_1 = examined_obj.pos_y;
 					if memory_bus.ppu_memory.double_heigth_obj && line < obj_bottom_line_plus_1 && line + 16 >= obj_bottom_line_plus_1 {
 						let mut row = memory_bus.ppu_memory.get_obj_row(examined_obj.tile_id,
-							if examined_obj.is_y_flipped {obj_bottom_line_plus_1 - line - 1} else {16 - (obj_bottom_line_plus_1 - line)}
+							if examined_obj.is_y_flipped {obj_bottom_line_plus_1 - line - 1} else {16 - (obj_bottom_line_plus_1 - line)},
+							false
 						);
 						self.current_line_obj_rows.push(
 							(	examined_obj.pos_x as usize, 
@@ -194,7 +195,8 @@ impl Ppu {
 					}
 					if !memory_bus.ppu_memory.double_heigth_obj && line + 8 < obj_bottom_line_plus_1 && line + 16 >= obj_bottom_line_plus_1 {
 						let mut row = memory_bus.ppu_memory.get_obj_row(examined_obj.tile_id,
-							if examined_obj.is_y_flipped {obj_bottom_line_plus_1 - line - 9} else {8 - (obj_bottom_line_plus_1 - line - 8)}
+							if examined_obj.is_y_flipped {obj_bottom_line_plus_1 - line - 9} else {8 - (obj_bottom_line_plus_1 - line - 8)},
+							false
 						);
 						self.current_line_obj_rows.push(
 							(	examined_obj.pos_x as usize, 
@@ -206,16 +208,15 @@ impl Ppu {
 				}
 			},
 			PPUModes::LineDraw(line, count) => {
-				if count == 0 {
-					// if non-cgb
-					self.current_line_obj_rows.sort_by(|row_a, row_b| row_a.0.cmp(&row_b.0))
+				if count == 0 && !memory_bus.is_cgb{
+					self.current_line_obj_rows.sort_by(|row_a, row_b| row_a.0.cmp(&row_b.0));
 				}
 				if count < VIEWPORT_PX_WIDTH {
 					let viewport_pixel = &mut framebuffer[((line as usize) * VIEWPORT_PX_WIDTH + count) * 4..((line as usize) * VIEWPORT_PX_WIDTH + count + 1) * 4];
 					if memory_bus.ppu_memory.bg_win_enable {
 						if memory_bus.ppu_memory.win_enable && line >= memory_bus.ppu_memory.wy_ram && count as u8 + 7 >= memory_bus.ppu_memory.wx_ram {
 							let tile_index = memory_bus.ppu_memory.get_win_tile_index((count as u8 + 7 - memory_bus.ppu_memory.wx_ram) / 8, (line - memory_bus.ppu_memory.wy_ram) / 8);
-							let tile = memory_bus.ppu_memory.get_bg_win_tile(tile_index);
+							let tile = memory_bus.ppu_memory.get_bg_win_tile(tile_index, false);
 							let pixel = tile[(line - memory_bus.ppu_memory.wy_ram) as usize % 8][(count + 7 - memory_bus.ppu_memory.wx_ram as usize) % 8];
 							viewport_pixel.clone_from_slice(match pixel {
 								TilePixel::Zero =>	&self.palette_translation[&memory_bus.ppu_memory.bg_palette[0]],
@@ -225,7 +226,7 @@ impl Ppu {
 							})
 						} else {
 							let tile_index = memory_bus.ppu_memory.get_bg_tile_index(memory_bus.ppu_memory.scx_ram.overflowing_add(count as u8).0 / 8, memory_bus.ppu_memory.scy_ram.overflowing_add(line).0 / 8);
-							let tile = memory_bus.ppu_memory.get_bg_win_tile(tile_index);
+							let tile = memory_bus.ppu_memory.get_bg_win_tile(tile_index, false);
 							let pixel = tile[(memory_bus.ppu_memory.scy_ram as usize + line as usize) % 8][(memory_bus.ppu_memory.scx_ram as usize + count) % 8];
 							viewport_pixel.clone_from_slice(match pixel {
 								TilePixel::Zero =>	&self.palette_translation[&memory_bus.ppu_memory.bg_palette[0]],
@@ -269,7 +270,8 @@ impl Ppu {
 		if self.oam_dma_count % 4 == 3 && self.oam_dma_count != 3{
 			//TODO do not use general read/write
 			memory_bus.ppu_memory.write(0xFE00 + self.oam_dma_count / 4 - 1,
-				memory_bus.read_byte(memory_bus.ppu_memory.oam_dma_reg as u16 * 0x100 + self.oam_dma_count as u16 / 4 - 1)
+				memory_bus.read_byte(memory_bus.ppu_memory.oam_dma_reg as u16 * 0x100 + self.oam_dma_count as u16 / 4 - 1),
+				false
 			)
 		}
 		if self.oam_dma_count == 643 {

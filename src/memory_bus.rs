@@ -15,12 +15,13 @@ pub struct MemoryBus {
 	/* unmapped memory */			// 0xFEA0 - 0xFEFF => Read returns 0, write does nothing
 	pub input_memory: InputMemory,	// 0xFF00
 	pub timer_memory: TimerMemory,	// 0xFF04 - 0xFF07
+	pub vbk_reg: bool,				// 0xFF4F
 	bootrom_reg: u8,				// 0xFF50
 	io_regis: [u8; 0x007F],			// 0xFF01 - 0xFF7F
 	high_intern_ram: [u8; 0x007F],	// 0xFF80 - 0xFFFE
 	interrupt_enable: u8,			// 0xFFFF
 
-	is_cgb: bool
+	pub is_cgb: bool
 }
 
 impl MemoryBus {
@@ -34,6 +35,7 @@ impl MemoryBus {
 			bootrom_2: [0; 0x700],
 			intern_ram: [0; 0x2000],
 			io_regis: [0; 0x007F],
+			vbk_reg: false,
 			bootrom_reg: 0x01,
 			high_intern_ram: [0; 0x007F],
 			interrupt_enable: 0,
@@ -297,24 +299,25 @@ impl MemoryBus {
 									self.cartridge.read(address as usize)
 								}
 			0x0900..=0x7FFF	=>		  self.cartridge.read(address as usize),
-			0x8000..=0x9FFF	=>		  self.ppu_memory.read(address as usize),
+			0x8000..=0x9FFF	=>		  self.ppu_memory.read(address as usize, self.is_cgb && self.vbk_reg),
 			0xA000..=0xBFFF	=>		  self.cartridge.read(address as usize),
 			0xC000..=0xDFFF	=>		  self.intern_ram[(address - 0xC000) as usize],
 			0xE000..=0xFDFF	=>		  self.intern_ram[(address - 0xE000) as usize],
-			0xFE00..=0xFE9F	=>		  self.ppu_memory.read(address as usize),
+			0xFE00..=0xFE9F	=>		  self.ppu_memory.read(address as usize, false),
 			0xFEA0..=0xFEFF	=> 0,
 			0xFF00			=>		self.input_memory.read(),
 			0xFF04..=0xFF07 =>		self.timer_memory.read(address as usize),
-			0xFF40 | 0xFF47 =>		  self.ppu_memory.read(address as usize),
-			0xFF41			=>		self.ppu_memory.read(address as usize),
+			0xFF40 | 0xFF47 =>		  self.ppu_memory.read(address as usize, false),
+			0xFF41			=>		self.ppu_memory.read(address as usize, false),
 			0xFF42			=>		  self.ppu_memory.scy_ram,
 			0xFF43			=>		  self.ppu_memory.scx_ram,
-			0xFF44			=>		  self.ppu_memory.read(address as usize),
+			0xFF44			=>		  self.ppu_memory.read(address as usize, false),
 			0xFF45			=>		  self.ppu_memory.lyc_ram,
 			0xFF46			=>		  self.ppu_memory.oam_dma_reg,
-			0xFF48 | 0xFF49 =>		self.ppu_memory.read(address as usize),
+			0xFF48 | 0xFF49 =>		self.ppu_memory.read(address as usize, false),
 			0xFF4A			=>		  self.ppu_memory.wy_ram,
 			0xFF4B			=>		  self.ppu_memory.wx_ram,
+			0xFF4F			=>		  0xFE | self.vbk_reg as u8,
 			0xFF50			=>		  self.bootrom_reg,
 			0xFF01..=0xFF7F	=>		  self.io_regis[(address - 0xFF01) as usize],
 			0xFF80..=0xFFFE	=> self.high_intern_ram[(address - 0xFF80) as usize],
@@ -329,24 +332,25 @@ impl MemoryBus {
 			0x0200..=0x08FF	=> if self.bootrom_reg == 0x00 {}
 								else  {self.cartridge.write(address as usize, data)},
 			0x0900..=0x7FFF	=>		  {self.cartridge.write(address as usize, data)},
-			0x8000..=0x9FFF	=>		   self.ppu_memory.write(address as usize, data),
+			0x8000..=0x9FFF	=>		   self.ppu_memory.write(address as usize, data, self.is_cgb && self.vbk_reg),
 			0xA000..=0xBFFF	=>		  {self.cartridge.write(address as usize, data)},
 			0xC000..=0xDFFF	=>		  {self.intern_ram[(address - 0xC000) as usize] = data},
 			0xE000..=0xFDFF	=>		  {self.intern_ram[(address - 0xE000) as usize] = data},
-			0xFE00..=0xFE9F	=>		   self.ppu_memory.write(address as usize, data),
+			0xFE00..=0xFE9F	=>		   self.ppu_memory.write(address as usize, data, false),
 			0xFEA0..=0xFEFF	=> {},
 			0xFF00			=>		{self.input_memory.write(data)}
 			0xFF04..=0xFF07 =>		{self.timer_memory.write(address as usize, data)},
-			0xFF40 | 0xFF47 =>		   self.ppu_memory.write(address as usize, data),
-			0xFF41			=>		self.ppu_memory.write(address as usize, data),
+			0xFF40 | 0xFF47 =>		   self.ppu_memory.write(address as usize, data, false),
+			0xFF41			=>		self.ppu_memory.write(address as usize, data, false),
 			0xFF42			=>		  {self.ppu_memory.scy_ram = data},
 			0xFF43			=>		  {self.ppu_memory.scx_ram = data},
 			0xFF44			=>		  {},
 			0xFF45			=>		  {self.ppu_memory.lyc_ram = data},
 			0xFF46			=>		  {self.ppu_memory.oam_dma_reg = data},
-			0xFF48 | 0xFF49 =>		self.ppu_memory.write(address as usize, data),
+			0xFF48 | 0xFF49 =>		self.ppu_memory.write(address as usize, data, false),
 			0xFF4A			=>		  {self.ppu_memory.wy_ram = data},
 			0xFF4B			=>		  {self.ppu_memory.wx_ram = data},
+			0xFF4F			=>		  {self.vbk_reg = (data & 0x01) != 0}
 			0xFF50			=>		  {self.bootrom_reg = data},
 			0xFF01..=0xFF7F	=>		  {self.io_regis[(address - 0xFF01) as usize] = data},
 			0xFF80..=0xFFFE	=> {self.high_intern_ram[(address - 0xFF80) as usize] = data},
