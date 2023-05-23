@@ -111,7 +111,7 @@ impl PPUMemory {
 			ppu_mode_1_interrupt_enable: false,
 			ppu_mode_0_interrupt_enable: false,
 			lyc_match_flag: false,
-			ppu_mode_id: 2,
+			ppu_mode_id: 0,
 			bg_palette: [PixelColour::White, PixelColour::LightGray, PixelColour::DarkGray, PixelColour::Black],
 			obj_palette: [[PixelColour::LightGray, PixelColour::DarkGray, PixelColour::Black]; 2],
 		}
@@ -174,8 +174,12 @@ impl PPUMemory {
 			self.bg_win_enable					= (data & 1) != 0;
 			let new_lcd_enable			= (data & (1 << 7)) != 0;
 			if self.lcd_enable != new_lcd_enable {
-				if new_lcd_enable	{self.is_oam_locked = true;		self.is_vram_locked = false;}	// LCD/PPU is enabled and immediately enters OAM Scan (Mode 2)
-				else				{self.is_oam_locked = false;	self.is_vram_locked = false;}	// LCD/PPU is disabled, freeing all access to display memory;
+				if !new_lcd_enable	{
+					self.is_oam_locked = false;
+					self.is_vram_locked = false;
+					self.ppu_mode_id = 0;
+					self.ly_ram = 0;
+				}	// LCD/PPU is disabled, freeing all access to display memory and setting ly and ppu_mode to 0;
 				self.lcd_enable = new_lcd_enable;
 			}
 		} else if address == 0xFF41 {
@@ -183,7 +187,10 @@ impl PPUMemory {
 			self.ppu_mode_2_interrupt_enable	= (data & (1 << 5)) != 0;
 			self.ppu_mode_1_interrupt_enable	= (data & (1 << 4)) != 0;
 			self.ppu_mode_0_interrupt_enable	= (data & (1 << 3)) != 0;
-		} else if address == 0xFF47 {
+		} else if address == 0xFF44 && self.lcd_enable {
+			self.ly_ram = data
+		}
+		else if address == 0xFF47 {
 			self.bgp_ram = data;
 			for i in 0..4 {
 				let colour_code = (data >> 2*i) & 0x03;
@@ -232,6 +239,7 @@ impl PPUMemory {
 			(self.lyc_match_flag as u8) << 2 |
 			(self.ppu_mode_id & 0x03) 
 		}
+		else if address == 0xFF44 { self.ly_ram }
 		else if address == 0xFF47 {	self.bgp_ram }
 		else if address == 0xFF48 { self.obp_ram[0] }
 		else { self.obp_ram[1] }	// address == 0xFF49

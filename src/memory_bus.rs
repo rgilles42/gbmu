@@ -116,7 +116,7 @@ impl MemoryBus {
 			0xFF41			=>		self.ppu_memory.read(address as usize),
 			0xFF42			=>		  self.ppu_memory.scy_ram,
 			0xFF43			=>		  self.ppu_memory.scx_ram,
-			0xFF44			=>		  self.ppu_memory.ly_ram,
+			0xFF44			=>		  self.ppu_memory.read(address as usize),
 			0xFF45			=>		  self.ppu_memory.lyc_ram,
 			0xFF46			=>		  self.oam_dma_reg,
 			0xFF48 | 0xFF49 =>		self.ppu_memory.read(address as usize),
