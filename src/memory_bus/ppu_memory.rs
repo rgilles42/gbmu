@@ -13,6 +13,7 @@ pub enum PixelColour {
     LightGray,
     DarkGray,
     Black,
+	RGBColour(u8, u8, u8)
 }
 
 #[derive(Copy, Clone)]
@@ -93,7 +94,13 @@ pub struct PPUMemory {
 	pub lyc_match_flag: bool,				// 0xFF41 & (1 << 2)
 	pub ppu_mode_id: u8,					// 0xFF41 & 0x03
 	pub bg_palette: [PixelColour; 4],		// 0xFF47
-	pub obj_palette: [[PixelColour; 3]; 2]	// 0xFF48 - 0xFF49
+	pub cgb_bg_palettes: [[PixelColour; 4]; 8],
+	pub cgb_bg_palette_autoincr: bool,
+	pub cgb_bg_palette_addr: u8,
+	pub obj_palettes: [[PixelColour; 3]; 2],	// 0xFF48 - 0xFF49
+	pub cgb_obj_palettes: [[PixelColour; 3]; 8],
+	pub cgb_obj_palette_autoincr: bool,
+	pub cgb_obj_palette_addr: u8
 }
 
 impl PPUMemory {
@@ -136,7 +143,13 @@ impl PPUMemory {
 			lyc_match_flag: false,
 			ppu_mode_id: 0,
 			bg_palette: [PixelColour::White, PixelColour::LightGray, PixelColour::DarkGray, PixelColour::Black],
-			obj_palette: [[PixelColour::LightGray, PixelColour::DarkGray, PixelColour::Black]; 2],
+			cgb_bg_palettes: [[PixelColour::RGBColour(0x00, 0x00, 0x00), PixelColour::RGBColour(0x00, 0x00, 0x00), PixelColour::RGBColour(0x00, 0x00, 0x00), PixelColour::RGBColour(0x00, 0x00, 0x00)]; 8],
+			cgb_bg_palette_addr: 0x00,
+			cgb_bg_palette_autoincr: false,
+			obj_palettes: [[PixelColour::LightGray, PixelColour::DarkGray, PixelColour::Black]; 2],
+			cgb_obj_palettes: [[PixelColour::RGBColour(0x00, 0x00, 0x00), PixelColour::RGBColour(0x00, 0x00, 0x00), PixelColour::RGBColour(0x00, 0x00, 0x00)]; 8],
+			cgb_obj_palette_addr: 0x00,
+			cgb_obj_palette_autoincr: false
 		}
 	}
 	fn write_tile(&mut self, floored_even_addr: usize, is_to_bank1: bool) {
@@ -267,13 +280,51 @@ impl PPUMemory {
 			self.obp_ram[address % 2] = data;
 			for i in 1..4 {
 				let colour_code = (data >> 2*i) & 0x03;
-				self.obj_palette[address % 2][i - 1] = match colour_code {
+				self.obj_palettes[address % 2][i - 1] = match colour_code {
 					0 => PixelColour::White,
 					1 => PixelColour::LightGray,
 					2 => PixelColour::DarkGray,
 					_ => PixelColour::Black
 				}
 			}
+		} else if address == 0xFF68 {
+			self.cgb_bg_palette_autoincr = data & 0x80 != 0;
+			self.cgb_bg_palette_addr = data & 0x3F;
+		} else if address == 0xFF69 {
+			if !self.is_vram_locked {
+				let selected_pixel_colour = &mut self.cgb_bg_palettes[self.cgb_bg_palette_addr as usize / 8][self.cgb_bg_palette_addr as usize % 8 / 2];
+				if let PixelColour::RGBColour(r, g, b) = selected_pixel_colour {
+					if self.cgb_bg_palette_addr % 2 == 0 {
+						*r = (data & 0x1F) * 8;
+						*g = (((*g / 8) & 0x18) | ((data & 0xE0) >> 5)) * 8;
+					} else {
+						*g = (((*g / 8) & 0x07) | ((data & 0x03) << 3)) * 8;
+						*b = ((data & 0x7C) >> 2) * 8;
+					}
+				} else {
+					println!("SHOULD NEVER HAPPEN!");
+				}
+			}
+			if self.cgb_bg_palette_autoincr {self.cgb_bg_palette_addr = (self.cgb_bg_palette_addr + 1) & 0x3F}
+		} else if address == 0xFF6A {
+			self.cgb_obj_palette_autoincr = data & 0x80 != 0;
+			self.cgb_obj_palette_addr = data & 0x3F;
+		} else if address == 0xFF6B {
+			if !self.is_vram_locked && self.cgb_obj_palette_addr % 8 / 2 != 0 {
+				let selected_pixel_colour = &mut self.cgb_obj_palettes[self.cgb_obj_palette_addr as usize / 8][self.cgb_obj_palette_addr as usize % 8 / 2 - 1];
+				if let PixelColour::RGBColour(r, g, b) = selected_pixel_colour {
+					if self.cgb_obj_palette_addr % 2 == 0 {
+						*r = (data & 0x1F) * 8;
+						*g = (((*g / 8) & 0x18) | ((data & 0xE0) >> 5)) * 8;
+					} else {
+						*g = (((*g / 8) & 0x07) | ((data & 0x03) << 3)) * 8;
+						*b = ((data & 0x7C) >> 2) * 8;
+					}
+				} else {
+					println!("SHOULD NEVER HAPPEN!");
+				}
+			}
+			if self.cgb_obj_palette_autoincr {self.cgb_obj_palette_addr = (self.cgb_obj_palette_addr + 1) & 0x3F}
 		}
 	}
 	pub fn read(&self, address: usize, is_from_bank1: bool) -> u8 {
@@ -308,7 +359,35 @@ impl PPUMemory {
 		else if address == 0xFF44 { self.ly_ram }
 		else if address == 0xFF47 {	self.bgp_ram }
 		else if address == 0xFF48 { self.obp_ram[0] }
-		else { self.obp_ram[1] }	// address == 0xFF49
+		else if address == 0xFF49 { self.obp_ram[1] }
+		else if address == 0xFF68 { ((self.cgb_bg_palette_autoincr as u8) << 7) | self.cgb_bg_palette_addr }
+		else if address == 0xFF69 {
+			if self.is_vram_locked {0xFF}
+			else if let PixelColour::RGBColour(r, g, b) = self.cgb_bg_palettes[self.cgb_bg_palette_addr as usize / 8][self.cgb_bg_palette_addr as usize % 8 / 2] {
+				if self.cgb_bg_palette_addr % 2 == 0 {
+					(r / 8) | ((g / 8) << 5)
+				} else {
+					((g / 8) >> 3) | ((b / 8) << 2)
+				}
+			} else {
+				println!("SHOULD NEVER HAPPEN!");
+				0xFF
+			}
+		}
+		else if address == 0xFF6A { ((self.cgb_obj_palette_autoincr as u8) << 7) | self.cgb_obj_palette_addr }
+		else {	// address == 0xFF6B
+			if self.is_vram_locked || self.cgb_obj_palette_addr % 8 / 2 == 0 {0xFF}
+			else if let PixelColour::RGBColour(r, g, b) = self.cgb_obj_palettes[self.cgb_obj_palette_addr as usize / 8][self.cgb_obj_palette_addr as usize % 8 / 2 - 1] {
+				if self.cgb_obj_palette_addr % 2 == 0 {
+					(r / 8) | ((g / 8) << 5)
+				} else {
+					((g / 8) >> 3) | ((b / 8) << 2)
+				}
+			} else {
+				println!("SHOULD NEVER HAPPEN!");
+				0xFF
+			}
+		}
 	}
 	pub fn get_bg_tile_index(&self, x: u8, y: u8) -> u8{
 		if self.bg_using_secondary_tilemap {

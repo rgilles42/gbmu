@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-//use minifb::{Key, Window, WindowOptions};
 use crate::memory_bus::MemoryBus;
 use crate::memory_bus::ppu_memory::{TilePixel, PixelColour, TileRow};
 
@@ -33,7 +31,6 @@ enum PPUModes {
 
 pub struct Ppu {
 	ppu_mode: PPUModes,
-	palette_translation: HashMap<PixelColour, [u8; 4]>,
 	current_line_obj_rows: Vec<(usize, TileRow, bool, bool)>,
 	oam_dma_count: usize,
 }
@@ -42,11 +39,19 @@ impl Ppu {
 	pub fn new() -> Ppu {
 		let ppu = Ppu {
 			ppu_mode: PPUModes::VBlank(153, 4559),
-			palette_translation: HashMap::from([(PixelColour::White, [0xFF, 0xFF, 0xFF, 0xFF]), (PixelColour::LightGray, [0xAA, 0xAA, 0xAA, 0xFF]), (PixelColour::DarkGray, [0x55, 0x55, 0x55, 0xFF]), (PixelColour::Black, [0x00, 0x00, 0x00, 0xFF])]),
 			current_line_obj_rows: Vec::new(),
 			oam_dma_count: 0,
 		};
 		ppu
+	}
+	fn palette_translation(pixel_colour: &PixelColour) -> [u8; 4] {
+		match pixel_colour {
+			PixelColour::White => [0xFF, 0xFF, 0xFF, 0xFF],
+			PixelColour::LightGray => [0xAA, 0xAA, 0xAA, 0xFF],
+			PixelColour::DarkGray => [0x55, 0x55, 0x55, 0xFF],
+			PixelColour::Black => [0x00, 0x00, 0x00, 0xFF],
+			PixelColour::RGBColour(r, g, b) => [*r, *g, *b, 0xFF]
+		}
 	}
 	pub fn update_tileset_win(&mut self, memory_bus: &mut MemoryBus, tileset_framebuffer: &mut [u8]) {
 		for (id_bank, bank) in memory_bus.ppu_memory.tiles.iter().enumerate() {
@@ -112,14 +117,26 @@ impl Ppu {
 							x * TILE_WIDTH +
 							pixel_index;
 						let tilemap_pixel = &mut tilemap_framebuffer[tilemap_pixel_pos * 4..(tilemap_pixel_pos + 1) * 4];
-						tilemap_pixel.clone_from_slice(
-							match pixel {
-								TilePixel::Zero =>	&self.palette_translation[&memory_bus.ppu_memory.bg_palette[0]],
-								TilePixel::One =>	&self.palette_translation[&memory_bus.ppu_memory.bg_palette[1]],
-								TilePixel::Two =>	&self.palette_translation[&memory_bus.ppu_memory.bg_palette[2]],
-								TilePixel::Three =>	&self.palette_translation[&memory_bus.ppu_memory.bg_palette[3]]
-							}
-						)
+						if memory_bus.is_cgb {
+							let uwu = memory_bus.ppu_memory.get_bg_tile_cgb_attr(x as u8, y as u8);
+							tilemap_pixel.clone_from_slice(&Ppu::palette_translation(&memory_bus.ppu_memory.cgb_bg_palettes[uwu.bg_palette_index as usize][
+								match pixel {
+									TilePixel::Zero =>	0,
+									TilePixel::One =>	1,
+									TilePixel::Two =>	2,
+									TilePixel::Three =>	3
+								}
+							]))
+						} else {
+							tilemap_pixel.clone_from_slice(&Ppu::palette_translation(&memory_bus.ppu_memory.bg_palette[
+								match pixel {
+									TilePixel::Zero =>	0,
+									TilePixel::One =>	1,
+									TilePixel::Two =>	2,
+									TilePixel::Three =>	3
+								}
+							]))
+						}
 					}
 				}
 			}
@@ -243,26 +260,30 @@ impl Ppu {
 							let tile_index = memory_bus.ppu_memory.get_win_tile_index((count as u8 + 7 - memory_bus.ppu_memory.wx_ram) / 8, (line - memory_bus.ppu_memory.wy_ram) / 8);
 							let tile = memory_bus.ppu_memory.get_bg_win_tile(tile_index, false);
 							let pixel = tile[(line - memory_bus.ppu_memory.wy_ram) as usize % 8][(count + 7 - memory_bus.ppu_memory.wx_ram as usize) % 8];
-							viewport_pixel.clone_from_slice(match pixel {
-								TilePixel::Zero =>	&self.palette_translation[&memory_bus.ppu_memory.bg_palette[0]],
-								TilePixel::One =>	&self.palette_translation[&memory_bus.ppu_memory.bg_palette[1]],
-								TilePixel::Two =>	&self.palette_translation[&memory_bus.ppu_memory.bg_palette[2]],
-								TilePixel::Three =>	&self.palette_translation[&memory_bus.ppu_memory.bg_palette[3]],
-							})
+							viewport_pixel.clone_from_slice(&Ppu::palette_translation(&memory_bus.ppu_memory.bg_palette[
+								match pixel {
+									TilePixel::Zero =>	0,
+									TilePixel::One =>	1,
+									TilePixel::Two =>	2,
+									TilePixel::Three =>	3,
+								}
+							]))
 						} else {
 							let tile_index = memory_bus.ppu_memory.get_bg_tile_index(memory_bus.ppu_memory.scx_ram.overflowing_add(count as u8).0 / 8, memory_bus.ppu_memory.scy_ram.overflowing_add(line).0 / 8);
 							let tile = memory_bus.ppu_memory.get_bg_win_tile(tile_index, false);
 							let pixel = tile[(memory_bus.ppu_memory.scy_ram as usize + line as usize) % 8][(memory_bus.ppu_memory.scx_ram as usize + count) % 8];
-							viewport_pixel.clone_from_slice(match pixel {
-								TilePixel::Zero =>	&self.palette_translation[&memory_bus.ppu_memory.bg_palette[0]],
-								TilePixel::One =>	&self.palette_translation[&memory_bus.ppu_memory.bg_palette[1]],
-								TilePixel::Two =>	&self.palette_translation[&memory_bus.ppu_memory.bg_palette[2]],
-								TilePixel::Three =>	&self.palette_translation[&memory_bus.ppu_memory.bg_palette[3]],
-							})
+							viewport_pixel.clone_from_slice(&Ppu::palette_translation(&memory_bus.ppu_memory.bg_palette[
+								match pixel {
+									TilePixel::Zero =>	0,
+									TilePixel::One =>	1,
+									TilePixel::Two =>	2,
+									TilePixel::Three =>	3,
+								}
+							]))
 						};
 						
 					} else {
-						viewport_pixel.clone_from_slice(&self.palette_translation[&PixelColour::White]);
+						viewport_pixel.clone_from_slice(&Ppu::palette_translation(&PixelColour::White));
 					}
 					if memory_bus.ppu_memory.obj_enable {
 						let mut pixel = (TilePixel::Zero, 0, false);
@@ -274,12 +295,12 @@ impl Ppu {
 								}
 							}
 						}
-						if !pixel.2 || viewport_pixel == self.palette_translation[&memory_bus.ppu_memory.bg_palette[0]] {
+						if !pixel.2 || viewport_pixel == &Ppu::palette_translation(&memory_bus.ppu_memory.bg_palette[0]) {
 							match pixel.0 {
 								TilePixel::Zero =>	{}
-								TilePixel::One =>	{viewport_pixel.clone_from_slice(&self.palette_translation[&memory_bus.ppu_memory.obj_palette[pixel.1][0]])}
-								TilePixel::Two =>	{viewport_pixel.clone_from_slice(&self.palette_translation[&memory_bus.ppu_memory.obj_palette[pixel.1][1]])}
-								TilePixel::Three =>	{viewport_pixel.clone_from_slice(&self.palette_translation[&memory_bus.ppu_memory.obj_palette[pixel.1][2]])}
+								TilePixel::One =>	{viewport_pixel.clone_from_slice(&Ppu::palette_translation(&memory_bus.ppu_memory.obj_palettes[pixel.1][0]))}
+								TilePixel::Two =>	{viewport_pixel.clone_from_slice(&Ppu::palette_translation(&memory_bus.ppu_memory.obj_palettes[pixel.1][1]))}
+								TilePixel::Three =>	{viewport_pixel.clone_from_slice(&Ppu::palette_translation(&memory_bus.ppu_memory.obj_palettes[pixel.1][2]))}
 							}
 						}
 					}
