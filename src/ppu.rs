@@ -12,7 +12,7 @@ const TILESET_PX_WIDTH: usize	= TILE_WIDTH * TILESET_NB_TILES_WIDTH;
 const TILESET_PX_HEIGHT: usize	= TILE_HEIGHT * TILESET_NB_TILES_HEIGHT;
 const TILESET_PX_SIZE: usize	= TILESET_PX_WIDTH * TILESET_PX_HEIGHT;
 const TILESETS_NB: usize = 3;
-pub const TILESET_VIEWER_PX_WIDTH: usize	= TILESET_PX_WIDTH;
+pub const TILESET_VIEWER_PX_WIDTH: usize	= TILESET_PX_WIDTH * 2;
 pub const TILESET_VIEWER_PX_HEIGHT: usize	= TILESET_PX_HEIGHT * TILESETS_NB;
 
 const TILEMAP_NB_TILES_WIDTH: usize		= 0x20;
@@ -53,14 +53,39 @@ impl Ppu {
 			for (id_tile, tile) in bank.iter().enumerate() {
 				for (id_row, row) in tile.iter().enumerate() {
 					for (pixel_id, pixel) in row.iter().enumerate() {
-						let tileset_pixel_pos = id_bank * TILESET_PX_SIZE +
-							(id_tile / TILESET_NB_TILES_WIDTH) * (TILESET_PX_WIDTH * TILE_HEIGHT) +
-							id_row * TILESET_PX_WIDTH +
+						let tileset_pixel_pos = id_bank * TILESET_PX_SIZE * 2 +
+							(id_tile / TILESET_NB_TILES_WIDTH) * (TILESET_PX_WIDTH * 2 * TILE_HEIGHT) +
+							id_row * TILESET_PX_WIDTH * 2 +
 							(id_tile % TILESET_NB_TILES_WIDTH) * TILE_WIDTH +
 							pixel_id;
 						let tileset_pixel = &mut tileset_framebuffer[tileset_pixel_pos * 4..(tileset_pixel_pos + 1) * 4];
 						tileset_pixel.clone_from_slice(
 							if id_row == 0 || pixel_id == 0 {&[0x00, 0x00, 0xFF, 0xFF]}
+							else {
+								match pixel {
+									TilePixel::Zero =>	&[0xFF, 0xFF, 0xFF, 0xFF],
+									TilePixel::One => 	&[0xA9, 0xA9, 0xA9, 0xFF],
+									TilePixel::Two => 	&[0x54, 0x54, 0x54, 0x54],
+									TilePixel::Three => &[0x00, 0x00, 0x00, 0xFF]
+								}
+							}
+						)
+					}
+				}
+			}
+		}
+		for (id_bank, bank) in memory_bus.ppu_memory.tiles2.iter().enumerate() {
+			for (id_tile, tile) in bank.iter().enumerate() {
+				for (id_row, row) in tile.iter().enumerate() {
+					for (pixel_id, pixel) in row.iter().enumerate() {
+						let tileset_pixel_pos = id_bank * TILESET_PX_SIZE * 2 +
+							(id_tile / TILESET_NB_TILES_WIDTH) * (TILESET_PX_WIDTH * 2 * TILE_HEIGHT) +
+							id_row * TILESET_PX_WIDTH * 2 +
+							(id_tile % TILESET_NB_TILES_WIDTH) * TILE_WIDTH +
+							pixel_id + TILESET_PX_WIDTH;
+						let tileset_pixel = &mut tileset_framebuffer[tileset_pixel_pos * 4..(tileset_pixel_pos + 1) * 4];
+						tileset_pixel.clone_from_slice(
+							if id_row == 0 || pixel_id == 0 {&[0x00, 0xFF, 0x00, 0xFF]}
 							else {
 								match pixel {
 									TilePixel::Zero =>	&[0xFF, 0xFF, 0xFF, 0xFF],
