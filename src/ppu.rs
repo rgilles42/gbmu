@@ -31,7 +31,7 @@ enum PPUModes {
 
 pub struct Ppu {
 	ppu_mode: PPUModes,
-	current_line_obj_rows: Vec<(usize, TileRow, bool, bool)>,
+	current_line_obj_rows: Vec<(usize, TileRow, bool, bool, u8)>,
 	oam_dma_count: usize,
 }
 
@@ -110,7 +110,7 @@ impl Ppu {
 			for x in 0..TILEMAP_NB_TILES_WIDTH {
 				let tile_index = memory_bus.ppu_memory.get_bg_tile_index(x as u8, y as u8);
 				let tile_attrs = if memory_bus.is_cgb {Some(memory_bus.ppu_memory.get_bg_tile_cgb_attr(x as u8, y as u8))} else {None};
-				let mut tile = memory_bus.ppu_memory.get_bg_win_tile(tile_index, if memory_bus.is_cgb {tile_attrs.unwrap().is_from_bank1} else {false});
+				let mut tile = memory_bus.ppu_memory.get_bg_win_tile(tile_index, memory_bus.is_cgb && tile_attrs.unwrap().is_from_bank1);
 				if memory_bus.is_cgb && tile_attrs.unwrap().vertical_flip {tile.reverse()}
 				for (row_index, row) in tile.iter_mut().enumerate() {
 					if memory_bus.is_cgb && tile_attrs.unwrap().horizontal_flip {row.reverse()}
@@ -228,25 +228,27 @@ impl Ppu {
 					if memory_bus.ppu_memory.double_heigth_obj && line < obj_bottom_line_plus_1 && line + 16 >= obj_bottom_line_plus_1 {
 						let mut row = memory_bus.ppu_memory.get_obj_row(examined_obj.tile_id,
 							if examined_obj.is_y_flipped {obj_bottom_line_plus_1 - line - 1} else {16 - (obj_bottom_line_plus_1 - line)},
-							false
+							memory_bus.is_cgb && examined_obj.cgb_is_from_bank1
 						);
 						self.current_line_obj_rows.push(
 							(	examined_obj.pos_x as usize, 
 								if examined_obj.is_x_flipped {row.reverse(); row} else {row},
 								examined_obj.is_using_obp1,
-								examined_obj.is_under_bg_win	)
+								examined_obj.is_under_bg_win,
+								examined_obj.cgb_palette_number	)
 						);
 					}
 					if !memory_bus.ppu_memory.double_heigth_obj && line + 8 < obj_bottom_line_plus_1 && line + 16 >= obj_bottom_line_plus_1 {
 						let mut row = memory_bus.ppu_memory.get_obj_row(examined_obj.tile_id,
 							if examined_obj.is_y_flipped {obj_bottom_line_plus_1 - line - 9} else {8 - (obj_bottom_line_plus_1 - line - 8)},
-							false
+							memory_bus.is_cgb && examined_obj.cgb_is_from_bank1
 						);
 						self.current_line_obj_rows.push(
 							(	examined_obj.pos_x as usize, 
 								if examined_obj.is_x_flipped {row.reverse(); row} else {row},
 								examined_obj.is_using_obp1,
-								examined_obj.is_under_bg_win	)
+								examined_obj.is_under_bg_win,
+								examined_obj.cgb_palette_number	)
 						);
 					}
 				}
@@ -257,52 +259,54 @@ impl Ppu {
 				}
 				if count < VIEWPORT_PX_WIDTH {
 					let viewport_pixel = &mut framebuffer[((line as usize) * VIEWPORT_PX_WIDTH + count) * 4..((line as usize) * VIEWPORT_PX_WIDTH + count + 1) * 4];
-					if memory_bus.ppu_memory.bg_win_enable {
+					let mut bgwin_is_a_zero_pixel = true;
+					if memory_bus.ppu_memory.bg_win_enable || memory_bus.is_cgb {
+						let pixel;
+						let tile_attrs;
 						if memory_bus.ppu_memory.win_enable && line >= memory_bus.ppu_memory.wy_ram && count as u8 + 7 >= memory_bus.ppu_memory.wx_ram {
-							let tile_index = memory_bus.ppu_memory.get_win_tile_index((count as u8 + 7 - memory_bus.ppu_memory.wx_ram) / 8, (line - memory_bus.ppu_memory.wy_ram) / 8);
-							let tile = memory_bus.ppu_memory.get_bg_win_tile(tile_index, false);
-							let pixel = tile[(line - memory_bus.ppu_memory.wy_ram) as usize % 8][(count + 7 - memory_bus.ppu_memory.wx_ram as usize) % 8];
-							viewport_pixel.clone_from_slice(&Ppu::palette_translation(&memory_bus.ppu_memory.bg_palette[
-								match pixel {
-									TilePixel::Zero =>	0,
-									TilePixel::One =>	1,
-									TilePixel::Two =>	2,
-									TilePixel::Three =>	3,
-								}
-							]))
+							let tile_index = memory_bus.ppu_memory.get_win_tile_index((count as u8 + 7 - memory_bus.ppu_memory.wx_ram) / 8, (count as u8 + 7 - memory_bus.ppu_memory.wx_ram) / 8);
+							tile_attrs = if memory_bus.is_cgb {Some(memory_bus.ppu_memory.get_win_tile_cgb_attr((count as u8 + 7 - memory_bus.ppu_memory.wx_ram) / 8, (count as u8 + 7 - memory_bus.ppu_memory.wx_ram) / 8))} else {None};
+							let mut tile = memory_bus.ppu_memory.get_bg_win_tile(tile_index, memory_bus.is_cgb && tile_attrs.unwrap().is_from_bank1);
+							if memory_bus.is_cgb && tile_attrs.unwrap().vertical_flip {tile.reverse()}
+							let mut row = tile[(line - memory_bus.ppu_memory.wy_ram) as usize % 8];
+							if memory_bus.is_cgb && tile_attrs.unwrap().horizontal_flip {row.reverse()}
+							pixel = row[(count + 7 - memory_bus.ppu_memory.wx_ram as usize) % 8];
 						} else {
 							let tile_index = memory_bus.ppu_memory.get_bg_tile_index(memory_bus.ppu_memory.scx_ram.overflowing_add(count as u8).0 / 8, memory_bus.ppu_memory.scy_ram.overflowing_add(line).0 / 8);
-							let tile = memory_bus.ppu_memory.get_bg_win_tile(tile_index, false);
-							let pixel = tile[(memory_bus.ppu_memory.scy_ram as usize + line as usize) % 8][(memory_bus.ppu_memory.scx_ram as usize + count) % 8];
-							viewport_pixel.clone_from_slice(&Ppu::palette_translation(&memory_bus.ppu_memory.bg_palette[
-								match pixel {
-									TilePixel::Zero =>	0,
-									TilePixel::One =>	1,
-									TilePixel::Two =>	2,
-									TilePixel::Three =>	3,
-								}
-							]))
+							tile_attrs = if memory_bus.is_cgb {Some(memory_bus.ppu_memory.get_bg_tile_cgb_attr(memory_bus.ppu_memory.scx_ram.overflowing_add(count as u8).0 / 8, memory_bus.ppu_memory.scy_ram.overflowing_add(line).0 / 8))} else {None};
+							let mut tile = memory_bus.ppu_memory.get_bg_win_tile(tile_index, memory_bus.is_cgb && tile_attrs.unwrap().is_from_bank1);
+							if memory_bus.is_cgb && tile_attrs.unwrap().vertical_flip {tile.reverse()}
+							let mut row = tile[(memory_bus.ppu_memory.scy_ram as usize + line as usize) % 8];
+							if memory_bus.is_cgb && tile_attrs.unwrap().horizontal_flip {row.reverse()}
+							pixel = row[(memory_bus.ppu_memory.scx_ram as usize + count) % 8];
 						};
-						
+						viewport_pixel.clone_from_slice(&Ppu::palette_translation(&if memory_bus.is_cgb {memory_bus.ppu_memory.cgb_bg_palettes[tile_attrs.unwrap().bg_palette_index as usize]} else {memory_bus.ppu_memory.bg_palette} [
+							match pixel {
+								TilePixel::Zero =>	0,
+								TilePixel::One =>	{bgwin_is_a_zero_pixel = false; 1},
+								TilePixel::Two =>	{bgwin_is_a_zero_pixel = false; 2},
+								TilePixel::Three =>	{bgwin_is_a_zero_pixel = false; 3},
+							}
+						]))
 					} else {
 						viewport_pixel.clone_from_slice(&Ppu::palette_translation(&PixelColour::White));
 					}
 					if memory_bus.ppu_memory.obj_enable {
-						let mut pixel = (TilePixel::Zero, 0, false);
+						let mut pixel = (TilePixel::Zero, 0, false, 0x00);
 						for relevant_row in self.current_line_obj_rows.iter().rev() {
 							if count < relevant_row.0 && count + 8 >= relevant_row.0 {
 								let pixel_value = relevant_row.1[8 - (relevant_row.0 - count)];
 								if pixel_value != TilePixel::Zero {
-									pixel = (pixel_value, relevant_row.2 as usize, relevant_row.3);
+									pixel = (pixel_value, relevant_row.2 as usize, relevant_row.3, relevant_row.4 as usize);
 								}
 							}
 						}
-						if !pixel.2 || viewport_pixel == &Ppu::palette_translation(&memory_bus.ppu_memory.bg_palette[0]) {
+						if !pixel.2 || bgwin_is_a_zero_pixel {
 							match pixel.0 {
 								TilePixel::Zero =>	{}
-								TilePixel::One =>	{viewport_pixel.clone_from_slice(&Ppu::palette_translation(&memory_bus.ppu_memory.obj_palettes[pixel.1][0]))}
-								TilePixel::Two =>	{viewport_pixel.clone_from_slice(&Ppu::palette_translation(&memory_bus.ppu_memory.obj_palettes[pixel.1][1]))}
-								TilePixel::Three =>	{viewport_pixel.clone_from_slice(&Ppu::palette_translation(&memory_bus.ppu_memory.obj_palettes[pixel.1][2]))}
+								TilePixel::One =>	{viewport_pixel.clone_from_slice(&Ppu::palette_translation(&if memory_bus.is_cgb {memory_bus.ppu_memory.cgb_obj_palettes[pixel.3]} else {memory_bus.ppu_memory.obj_palettes[pixel.1]}[0]))}
+								TilePixel::Two =>	{viewport_pixel.clone_from_slice(&Ppu::palette_translation(&if memory_bus.is_cgb {memory_bus.ppu_memory.cgb_obj_palettes[pixel.3]} else {memory_bus.ppu_memory.obj_palettes[pixel.1]}[1]))}
+								TilePixel::Three =>	{viewport_pixel.clone_from_slice(&Ppu::palette_translation(&if memory_bus.is_cgb {memory_bus.ppu_memory.cgb_obj_palettes[pixel.3]} else {memory_bus.ppu_memory.obj_palettes[pixel.1]}[2]))}
 							}
 						}
 					}

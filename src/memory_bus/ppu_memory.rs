@@ -30,12 +30,12 @@ pub struct OAMObject {
 	pub tile_id: u8,
 	pub pos_x: u8,
 	pub pos_y: u8,
-	pub palette_number: u8,
-	pub is_from_bank1: bool,
-	pub is_using_obp1: bool,
-	pub is_x_flipped: bool,
-	pub is_y_flipped: bool,
 	pub is_under_bg_win: bool,
+	pub is_y_flipped: bool,
+	pub is_x_flipped: bool,
+	pub is_using_obp1: bool,
+	pub cgb_is_from_bank1: bool,
+	pub cgb_palette_number: u8
 }
 
 impl OAMObject {
@@ -44,12 +44,12 @@ impl OAMObject {
 			tile_id: 0xFF,
 			pos_x: 0xFF,
 			pos_y: 0xFF,
-			palette_number: 0x07,
-			is_from_bank1: true,
-			is_using_obp1: true,
-			is_x_flipped: true,
+			is_under_bg_win: true,
 			is_y_flipped: true,
-			is_under_bg_win: true 
+			is_x_flipped: true,
+			is_using_obp1: true,
+			cgb_is_from_bank1: true,
+			cgb_palette_number: 0x07
 		}
 	}
 }
@@ -233,8 +233,8 @@ impl PPUMemory {
 					self.objects[address / 4].is_y_flipped = (data & (1 << 6)) != 0;
 					self.objects[address / 4].is_x_flipped = (data & (1 << 5)) != 0;
 					self.objects[address / 4].is_using_obp1 = (data & (1 << 4)) != 0;
-					self.objects[address / 4].is_from_bank1 = (data & (1 << 3)) != 0;
-					self.objects[address / 4].palette_number = data & 0x07;
+					self.objects[address / 4].cgb_is_from_bank1 = (data & (1 << 3)) != 0;
+					self.objects[address / 4].cgb_palette_number = data & 0x07;
 				}
 			}
 
