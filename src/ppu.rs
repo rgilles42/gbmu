@@ -120,25 +120,16 @@ impl Ppu {
 							x * TILE_WIDTH +
 							pixel_index;
 						let tilemap_pixel = &mut tilemap_framebuffer[tilemap_pixel_pos * 4..(tilemap_pixel_pos + 1) * 4];
-						if memory_bus.is_cgb {
-							tilemap_pixel.clone_from_slice(&Ppu::palette_translation(&memory_bus.ppu_memory.cgb_bg_palettes[tile_attrs.unwrap().bg_palette_index as usize][
-								match pixel {
-									TilePixel::Zero =>	0,
-									TilePixel::One =>	1,
-									TilePixel::Two =>	2,
-									TilePixel::Three =>	3
-								}
-							]))
-						} else {
-							tilemap_pixel.clone_from_slice(&Ppu::palette_translation(&memory_bus.ppu_memory.bg_palette[
-								match pixel {
-									TilePixel::Zero =>	0,
-									TilePixel::One =>	1,
-									TilePixel::Two =>	2,
-									TilePixel::Three =>	3
-								}
-							]))
-						}
+						//if memory_bus.is_cgb && tile_attrs.unwrap().is_from_bank1 {tilemap_pixel.clone_from_slice(&[0xFF, 0x00, 0x00, 0xFF])} else {
+						tilemap_pixel.clone_from_slice(&Ppu::palette_translation(&if memory_bus.is_cgb {memory_bus.ppu_memory.cgb_bg_palettes[tile_attrs.unwrap().bg_palette_index as usize]} else {memory_bus.ppu_memory.bg_palette}[
+							match pixel {
+								TilePixel::Zero =>	0,
+								TilePixel::One =>	1,
+								TilePixel::Two =>	2,
+								TilePixel::Three =>	3
+							}
+						]))
+						//}
 					}
 				}
 			}
