@@ -109,8 +109,11 @@ impl Ppu {
 		for y in 0..TILEMAP_NB_TILES_HEIGHT {
 			for x in 0..TILEMAP_NB_TILES_WIDTH {
 				let tile_index = memory_bus.ppu_memory.get_bg_tile_index(x as u8, y as u8);
-				let tile = memory_bus.ppu_memory.get_bg_win_tile(tile_index, false);
-				for (row_index, row) in tile.iter().enumerate() {
+				let tile_attrs = if memory_bus.is_cgb {Some(memory_bus.ppu_memory.get_bg_tile_cgb_attr(x as u8, y as u8))} else {None};
+				let mut tile = memory_bus.ppu_memory.get_bg_win_tile(tile_index, if memory_bus.is_cgb {tile_attrs.unwrap().is_from_bank1} else {false});
+				if memory_bus.is_cgb && tile_attrs.unwrap().vertical_flip {tile.reverse()}
+				for (row_index, row) in tile.iter_mut().enumerate() {
+					if memory_bus.is_cgb && tile_attrs.unwrap().horizontal_flip {row.reverse()}
 					for (pixel_index, pixel) in row.iter().enumerate() {
 						let tilemap_pixel_pos = y * TILEMAP_PX_WIDTH * TILE_HEIGHT +
 							row_index * TILEMAP_PX_WIDTH +
@@ -118,8 +121,7 @@ impl Ppu {
 							pixel_index;
 						let tilemap_pixel = &mut tilemap_framebuffer[tilemap_pixel_pos * 4..(tilemap_pixel_pos + 1) * 4];
 						if memory_bus.is_cgb {
-							let uwu = memory_bus.ppu_memory.get_bg_tile_cgb_attr(x as u8, y as u8);
-							tilemap_pixel.clone_from_slice(&Ppu::palette_translation(&memory_bus.ppu_memory.cgb_bg_palettes[uwu.bg_palette_index as usize][
+							tilemap_pixel.clone_from_slice(&Ppu::palette_translation(&memory_bus.ppu_memory.cgb_bg_palettes[tile_attrs.unwrap().bg_palette_index as usize][
 								match pixel {
 									TilePixel::Zero =>	0,
 									TilePixel::One =>	1,
