@@ -11,12 +11,14 @@ pub struct MemoryBus {
 	bootrom_2: [u8; 0x700],			// 0x0200 - 0x08FF
 	pub cartridge: Cartridge,		// 0x0000 - 0x7FFF + 0xA000 - 0xBFFF
 	pub ppu_memory: PPUMemory,		// 0x8000 - 0x9FFF + 0xFE00 - 0xFE9F + 0xFF40 - 0xFF45 + 0xFF47 - 0xFF4B + 0xFF68 - 0xFF6B
-	intern_ram: [u8; 0x2000],		// 0xC000 - 0xDFFF + echo at 0xE000 - 0xFDFF
+	intern_ram: [u8; 0x1000],		// 0xC000 - 0xCFFF + echo at 0xE000 - 0xEFFF
+	intern_ram2: [[u8; 0x1000]; 7],		// 0xD000 - 0xDFFF + echo at 0xF000 - 0xFDFF
 	/* unmapped memory */			// 0xFEA0 - 0xFEFF => Read returns 0, write does nothing
 	pub input_memory: InputMemory,	// 0xFF00
 	pub timer_memory: TimerMemory,	// 0xFF04 - 0xFF07
-	pub vbk_reg: bool,				// 0xFF4F
+	vbk_reg: bool,				// 0xFF4F
 	bootrom_reg: u8,				// 0xFF50
+	svbk_reg: u8,					// 0xFF70
 	io_regis: [u8; 0x007F],			// 0xFF01 - 0xFF7F
 	high_intern_ram: [u8; 0x007F],	// 0xFF80 - 0xFFFE
 	interrupt_enable: u8,			// 0xFFFF
@@ -33,10 +35,12 @@ impl MemoryBus {
 			cartridge: Cartridge::new(rom_path),
 			bootrom_1: [0; 0x100],
 			bootrom_2: [0; 0x700],
-			intern_ram: [0; 0x2000],
+			intern_ram: [0; 0x1000],
+			intern_ram2: [[0; 0x1000]; 7],
 			io_regis: [0; 0x007F],
 			vbk_reg: false,
 			bootrom_reg: 0x01,
+			svbk_reg: 0x01,
 			high_intern_ram: [0; 0x007F],
 			interrupt_enable: 0,
 			is_cgb: false
@@ -301,8 +305,10 @@ impl MemoryBus {
 			0x0900..=0x7FFF	=>		  self.cartridge.read(address as usize),
 			0x8000..=0x9FFF	=>		  self.ppu_memory.read(address as usize, self.is_cgb && self.vbk_reg),
 			0xA000..=0xBFFF	=>		  self.cartridge.read(address as usize),
-			0xC000..=0xDFFF	=>		  self.intern_ram[(address - 0xC000) as usize],
-			0xE000..=0xFDFF	=>		  self.intern_ram[(address - 0xE000) as usize],
+			0xC000..=0xCFFF	=>		  self.intern_ram[(address - 0xC000) as usize],
+			0xD000..=0xDFFF	=>		  self.intern_ram2[self.svbk_reg as usize - 1][(address - 0xD000) as usize],
+			0xE000..=0xEFFF	=>		  self.intern_ram[(address - 0xE000) as usize],
+			0xF000..=0xFDFF	=>		  self.intern_ram2[self.svbk_reg as usize - 1][(address - 0xF000) as usize],
 			0xFE00..=0xFE9F	=>		  self.ppu_memory.read(address as usize, false),
 			0xFEA0..=0xFEFF	=> 0,
 			0xFF00			=>		self.input_memory.read(),
@@ -320,6 +326,7 @@ impl MemoryBus {
 			0xFF4F			=>		  0xFE | self.vbk_reg as u8,
 			0xFF50			=>		  self.bootrom_reg,
 			0xFF68..=0xFF6B =>		self.ppu_memory.read(address as usize, false),
+			0xFF70			=>		self.svbk_reg,
 			0xFF01..=0xFF7F	=>		  self.io_regis[(address - 0xFF01) as usize],
 			0xFF80..=0xFFFE	=> self.high_intern_ram[(address - 0xFF80) as usize],
 			0xFFFF			=> self.interrupt_enable
@@ -335,8 +342,10 @@ impl MemoryBus {
 			0x0900..=0x7FFF	=>		  {self.cartridge.write(address as usize, data)},
 			0x8000..=0x9FFF	=>		   self.ppu_memory.write(address as usize, data, self.is_cgb && self.vbk_reg),
 			0xA000..=0xBFFF	=>		  {self.cartridge.write(address as usize, data)},
-			0xC000..=0xDFFF	=>		  {self.intern_ram[(address - 0xC000) as usize] = data},
-			0xE000..=0xFDFF	=>		  {self.intern_ram[(address - 0xE000) as usize] = data},
+			0xC000..=0xCFFF	=>		  {self.intern_ram[(address - 0xC000) as usize] = data},
+			0xD000..=0xDFFF	=>		  {self.intern_ram2[self.svbk_reg as usize - 1][(address - 0xD000) as usize] = data},
+			0xE000..=0xEFFF	=>		  {self.intern_ram[(address - 0xE000) as usize] = data},
+			0xF000..=0xFDFF	=>		  {self.intern_ram2[self.svbk_reg as usize - 1][(address - 0xF000) as usize] = data},
 			0xFE00..=0xFE9F	=>		   self.ppu_memory.write(address as usize, data, false),
 			0xFEA0..=0xFEFF	=> {},
 			0xFF00			=>		{self.input_memory.write(data)}
@@ -354,6 +363,7 @@ impl MemoryBus {
 			0xFF4F			=>		  {self.vbk_reg = (data & 0x01) != 0}
 			0xFF50			=>		  {self.bootrom_reg = data},
 			0xFF68..=0xFF6B =>		self.ppu_memory.write(address as usize, data, false),
+			0xFF70			=>		{if self.is_cgb {self.svbk_reg = data & 0x07; if self.svbk_reg == 0 {self.svbk_reg += 1}}}
 			0xFF01..=0xFF7F	=>		  {self.io_regis[(address - 0xFF01) as usize] = data},
 			0xFF80..=0xFFFE	=> {self.high_intern_ram[(address - 0xFF80) as usize] = data},
 			0xFFFF			=> {self.interrupt_enable = data}
