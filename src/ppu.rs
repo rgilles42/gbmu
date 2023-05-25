@@ -255,8 +255,8 @@ impl Ppu {
 						let pixel;
 						let tile_attrs;
 						if memory_bus.ppu_memory.win_enable && line >= memory_bus.ppu_memory.wy_ram && count as u8 + 7 >= memory_bus.ppu_memory.wx_ram {
-							let tile_index = memory_bus.ppu_memory.get_win_tile_index((count as u8 + 7 - memory_bus.ppu_memory.wx_ram) / 8, (count as u8 + 7 - memory_bus.ppu_memory.wx_ram) / 8);
-							tile_attrs = if memory_bus.is_cgb {Some(memory_bus.ppu_memory.get_win_tile_cgb_attr((count as u8 + 7 - memory_bus.ppu_memory.wx_ram) / 8, (count as u8 + 7 - memory_bus.ppu_memory.wx_ram) / 8))} else {None};
+							let tile_index = memory_bus.ppu_memory.get_win_tile_index((count as u8 + 7 - memory_bus.ppu_memory.wx_ram) / 8, (line - memory_bus.ppu_memory.wy_ram) / 8);
+							tile_attrs = if memory_bus.is_cgb {Some(memory_bus.ppu_memory.get_win_tile_cgb_attr((count as u8 + 7 - memory_bus.ppu_memory.wx_ram) / 8, (line - memory_bus.ppu_memory.wy_ram) / 8))} else {None};
 							let mut tile = memory_bus.ppu_memory.get_bg_win_tile(tile_index, memory_bus.is_cgb && tile_attrs.unwrap().is_from_bank1);
 							if memory_bus.is_cgb && tile_attrs.unwrap().vertical_flip {tile.reverse()}
 							let mut row = tile[(line - memory_bus.ppu_memory.wy_ram) as usize % 8];
