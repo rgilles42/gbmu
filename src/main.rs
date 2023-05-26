@@ -216,11 +216,15 @@ fn main() -> Result<(), Error> {
 					let mut nb_cycles = cpu.tick(memory_bus.as_mut().unwrap());
 					input::tick(memory_bus.as_mut().unwrap(), &main_input);
 					let mut i = 0;
+					let mut ppu_is_halting_cpu = false;
 					while i < nb_cycles {
 						timer.tick(memory_bus.as_mut().unwrap());
-						let res = ppu.tick(memory_bus.as_mut().unwrap(), pixels.get_mut(&windows[&WindowTypes::Main].id()).unwrap().frame_mut());
+						let res = if !memory_bus.as_ref().unwrap().is_double_speed || i % 2 == 0 {
+								ppu.tick(memory_bus.as_mut().unwrap(), pixels.get_mut(&windows[&WindowTypes::Main].id()).unwrap().frame_mut())
+							} else {(false, ppu_is_halting_cpu)};
 						frame_completed |= res.0;
-						if res.1 {nb_cycles += 2}
+						ppu_is_halting_cpu = res.1;
+						if ppu_is_halting_cpu {nb_cycles += 2}
 						i += 1;
 					}
 					nb_ticks += nb_cycles as u64;

@@ -16,7 +16,9 @@ pub struct MemoryBus {
 	/* unmapped memory */			// 0xFEA0 - 0xFEFF => Read returns 0, write does nothing
 	pub input_memory: InputMemory,	// 0xFF00
 	pub timer_memory: TimerMemory,	// 0xFF04 - 0xFF07
-	vbk_reg: bool,				// 0xFF4F
+	pub is_double_speed: bool,		// 0xFF4D & 0x80
+	pub speed_chg_scheduled: bool,	// 0xFF4D & 0x01
+	vbk_reg: bool,					// 0xFF4F
 	bootrom_reg: u8,				// 0xFF50
 	svbk_reg: u8,					// 0xFF70
 	io_regis: [u8; 0x007F],			// 0xFF01 - 0xFF7F
@@ -38,6 +40,8 @@ impl MemoryBus {
 			intern_ram: [0; 0x1000],
 			intern_ram2: [[0; 0x1000]; 7],
 			io_regis: [0; 0x007F],
+			is_double_speed: false,
+			speed_chg_scheduled: false,
 			vbk_reg: false,
 			bootrom_reg: 0x01,
 			svbk_reg: 0x01,
@@ -323,6 +327,7 @@ impl MemoryBus {
 			0xFF48 | 0xFF49 =>		self.ppu_memory.read(address as usize, false),
 			0xFF4A			=>		  self.ppu_memory.wy_ram,
 			0xFF4B			=>		  self.ppu_memory.wx_ram,
+			0xFF4D			=>		(self.is_double_speed as u8) << 7 | self.speed_chg_scheduled as u8,
 			0xFF4F			=>		  0xFE | self.vbk_reg as u8,
 			0xFF50			=>		  self.bootrom_reg,
 			0xFF51			=>		((self.ppu_memory.vram_dma_src_regs & 0xFF00) >> 8) as u8,
@@ -365,6 +370,7 @@ impl MemoryBus {
 			0xFF48 | 0xFF49 =>		self.ppu_memory.write(address as usize, data, false),
 			0xFF4A			=>		  {self.ppu_memory.wy_ram = data},
 			0xFF4B			=>		  {self.ppu_memory.wx_ram = data},
+			0xFF4D			=>		{self.speed_chg_scheduled = (data & 0x01) != 0}
 			0xFF4F			=>		  {self.vbk_reg = (data & 0x01) != 0}
 			0xFF50			=>		  {self.bootrom_reg = data},
 			0xFF51			=>		{self.ppu_memory.vram_dma_src_regs = (data as u16) << 8 | self.ppu_memory.vram_dma_src_regs & 0x00F0}

@@ -948,8 +948,11 @@ impl Cpu {
 			}
 			Instruction::HALT(_, _) => {self.state = CpuState::Halted}
 			Instruction::STOP(_, _) => {
+				if memory_bus.is_cgb && memory_bus.speed_chg_scheduled {
+					memory_bus.is_double_speed = !memory_bus.is_double_speed;
+					memory_bus.speed_chg_scheduled = false;
+				}
 				self.fetch_pc(memory_bus);
-				self.state = CpuState::Stopped
 			}
 			Instruction::DI(_, _) => {self.ime_set = false}
 			Instruction::EI(_, _) => {self.ime_scheduled = true}

@@ -8,7 +8,7 @@ use instructions::Instruction;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CpuState{
-	Running, Halted, Stopped
+	Running, Halted
 }
 
 //#[derive(Debug)]
@@ -55,7 +55,7 @@ impl Cpu {
 			}
 		} else {
 			if self.state == CpuState::Halted {
-				self.next_op = Some(Instruction::NOP(0, 1));
+				self.next_op = Some(Instruction::NOP(0, if memory_bus.is_double_speed {2} else {1}));
 			} else {
 				self.next_op = Instruction::from_opcode(self.fetch_pc(memory_bus), self, memory_bus);
 			}
