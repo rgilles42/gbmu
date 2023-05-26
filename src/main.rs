@@ -213,11 +213,15 @@ fn main() -> Result<(), Error> {
 						println!("Tick count: {}", nb_ticks);
 						std::thread::sleep(std::time::Duration::from_millis(500))
 					}
-					let nb_cycles = cpu.tick(memory_bus.as_mut().unwrap());
+					let mut nb_cycles = cpu.tick(memory_bus.as_mut().unwrap());
 					input::tick(memory_bus.as_mut().unwrap(), &main_input);
-					for _ in 0..nb_cycles {
-						frame_completed |= ppu.tick(memory_bus.as_mut().unwrap(), pixels.get_mut(&windows[&WindowTypes::Main].id()).unwrap().frame_mut());
+					let mut i = 0;
+					while i < nb_cycles {
 						timer.tick(memory_bus.as_mut().unwrap());
+						let res = ppu.tick(memory_bus.as_mut().unwrap(), pixels.get_mut(&windows[&WindowTypes::Main].id()).unwrap().frame_mut());
+						frame_completed |= res.0;
+						if res.1 {nb_cycles += 2}
+						i += 1;
 					}
 					nb_ticks += nb_cycles as u64;
 				}

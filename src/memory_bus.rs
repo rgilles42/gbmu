@@ -325,6 +325,11 @@ impl MemoryBus {
 			0xFF4B			=>		  self.ppu_memory.wx_ram,
 			0xFF4F			=>		  0xFE | self.vbk_reg as u8,
 			0xFF50			=>		  self.bootrom_reg,
+			0xFF51			=>		((self.ppu_memory.vram_dma_src_regs & 0xFF00) >> 8) as u8,
+			0xFF52			=>		(self.ppu_memory.vram_dma_src_regs & 0x00F0) as u8,
+			0xFF53			=>		((self.ppu_memory.vram_dma_dst_regs & 0x1F00) >> 8) as u8,
+			0xFF54			=>		(self.ppu_memory.vram_dma_dst_regs & 0x00F0) as u8,
+			0xFF55			=>		(!self.ppu_memory.vram_dma_is_active as u8) << 7 | self.ppu_memory.vram_dma_stat & 0x7F,
 			0xFF68..=0xFF6B =>		self.ppu_memory.read(address as usize, false),
 			0xFF70			=>		self.svbk_reg,
 			0xFF01..=0xFF7F	=>		  self.io_regis[(address - 0xFF01) as usize],
@@ -362,6 +367,17 @@ impl MemoryBus {
 			0xFF4B			=>		  {self.ppu_memory.wx_ram = data},
 			0xFF4F			=>		  {self.vbk_reg = (data & 0x01) != 0}
 			0xFF50			=>		  {self.bootrom_reg = data},
+			0xFF51			=>		{self.ppu_memory.vram_dma_src_regs = (data as u16) << 8 | self.ppu_memory.vram_dma_src_regs & 0x00F0}
+			0xFF52			=>		{self.ppu_memory.vram_dma_src_regs = self.ppu_memory.vram_dma_src_regs & 0xFF00 | (data & 0xF0) as u16}
+			0xFF53			=>		{self.ppu_memory.vram_dma_dst_regs = ((data & 0x1F) as u16) << 8 | self.ppu_memory.vram_dma_dst_regs & 0x00F0}
+			0xFF54			=>		{self.ppu_memory.vram_dma_dst_regs = self.ppu_memory.vram_dma_dst_regs & 0x1F00 | (data & 0xF0) as u16}
+			0xFF55			=>		if self.ppu_memory.vram_dma_is_active && data & 0x80 == 0 {
+										self.ppu_memory.vram_dma_is_active = false;
+									} else {
+										self.ppu_memory.vram_dma_is_hblank_mode = data & 0x80 != 0;
+										self.ppu_memory.vram_dma_stat = data & 0x7F;
+										self.ppu_memory.vram_dma_is_active = true;
+									}
 			0xFF68..=0xFF6B =>		self.ppu_memory.write(address as usize, data, false),
 			0xFF70			=>		{if self.is_cgb {self.svbk_reg = data & 0x07; if self.svbk_reg == 0 {self.svbk_reg += 1}}}
 			0xFF01..=0xFF7F	=>		  {self.io_regis[(address - 0xFF01) as usize] = data},

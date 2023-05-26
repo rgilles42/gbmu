@@ -71,6 +71,11 @@ pub struct PPUMemory {
 	obp_ram: [u8; 2],						// 0xFF48 - 0xFF49
 	pub wy_ram: u8,							// 0xFF4A
 	pub wx_ram: u8,							// 0xFF4B
+	pub vram_dma_src_regs: u16,			// 0xFF51 - 0xFF52
+	pub vram_dma_dst_regs: u16,			// 0xFF53 - 0xFF54
+	pub vram_dma_stat: u8,					// 0xFF55 & 0x7F
+	pub vram_dma_is_hblank_mode: bool,		// 0xFF55 & 0x80 in write mode
+	pub vram_dma_is_active: bool,			// 0xFF55 & 0x80 in read mode
 
 	pub tiles: [[Tile; 0x80]; 3],			// 0x8000 - 0x97FF
 	pub tiles2: [[Tile; 0x80]; 3],			// idem
@@ -121,6 +126,11 @@ impl PPUMemory {
 			obp_ram: [0; 2],
 			wy_ram: 0,
 			wx_ram: 0,
+			vram_dma_src_regs: 0xFFF0,
+			vram_dma_dst_regs: 0x1FF0,
+			vram_dma_stat: 0xFF,
+			vram_dma_is_hblank_mode: false,
+			vram_dma_is_active: false,
 			tiles: [ [[[TilePixel::Zero;8];8];0x80]; 3],
 			tiles2: [ [[[TilePixel::Zero;8];8];0x80]; 3],
 			bg_tilemap0: [[0; 0x20]; 0x20],

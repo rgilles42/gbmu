@@ -33,6 +33,7 @@ pub struct Ppu {
 	ppu_mode: PPUModes,
 	current_line_obj_rows: Vec<(usize, TileRow, bool, bool, u8)>,
 	oam_dma_count: usize,
+	vram_dma_count: u16,
 }
 
 impl Ppu {
@@ -41,6 +42,7 @@ impl Ppu {
 			ppu_mode: PPUModes::VBlank(153, 4559),
 			current_line_obj_rows: Vec::new(),
 			oam_dma_count: 0,
+			vram_dma_count: 0x00
 		};
 		ppu
 	}
@@ -325,7 +327,19 @@ impl Ppu {
 		}
 	}
 
-	pub fn tick(&mut self, memory_bus: &mut MemoryBus, framebuffer: &mut [u8]) -> bool {
+	fn tick_vram_dma(&mut self, memory_bus: &mut MemoryBus) {
+		memory_bus.write_byte(0x8000 | memory_bus.ppu_memory.vram_dma_dst_regs + self.vram_dma_count , memory_bus.read_byte(memory_bus.ppu_memory.vram_dma_src_regs + self.vram_dma_count));
+		if self.vram_dma_count == 0x0F {
+			self.vram_dma_count = 0x00;
+			if memory_bus.ppu_memory.vram_dma_stat != 0xFF {
+				memory_bus.ppu_memory.vram_dma_stat = memory_bus.ppu_memory.vram_dma_stat.overflowing_sub(0x01).0;
+				memory_bus.ppu_memory.vram_dma_dst_regs = (memory_bus.ppu_memory.vram_dma_dst_regs + 0x0010) & 0x1FF0;
+				memory_bus.ppu_memory.vram_dma_src_regs =  memory_bus.ppu_memory.vram_dma_src_regs.overflowing_add(0x0010).0;
+			} else {memory_bus.ppu_memory.vram_dma_is_active = false}
+		} else {self.vram_dma_count += 1}
+	}
+
+	pub fn tick(&mut self, memory_bus: &mut MemoryBus, framebuffer: &mut [u8]) -> (bool, bool) {
 		let mut frame_completed = false;
 		if memory_bus.ppu_memory.lcd_enable {
 			self.tick_viewport(memory_bus, framebuffer);
@@ -340,6 +354,15 @@ impl Ppu {
 		if memory_bus.ppu_memory.oam_dma_reg != 0x00 {
 			self.tick_oam_dma(memory_bus);
 		}
-		frame_completed
+		if memory_bus.is_cgb && memory_bus.ppu_memory.vram_dma_is_active {
+			if !memory_bus.ppu_memory.vram_dma_is_hblank_mode {
+					self.tick_vram_dma(memory_bus)
+			} else if let PPUModes::HBlank(_, count) = self.ppu_mode {
+				if count >= 360 {
+					self.tick_vram_dma(memory_bus)
+				}
+			}
+		}
+		(frame_completed, memory_bus.ppu_memory.vram_dma_is_active)
 	}
 }
