@@ -253,9 +253,9 @@ impl Ppu {
 				if count < VIEWPORT_PX_WIDTH {
 					let viewport_pixel = &mut framebuffer[((line as usize) * VIEWPORT_PX_WIDTH + count) * 4..((line as usize) * VIEWPORT_PX_WIDTH + count + 1) * 4];
 					let mut bgwin_is_a_zero_pixel = true;
+					let mut tile_attrs = None;
 					if memory_bus.ppu_memory.bg_win_enable || memory_bus.is_cgb {
 						let pixel;
-						let tile_attrs;
 						if memory_bus.ppu_memory.win_enable && line >= memory_bus.ppu_memory.wy_ram && count as u8 + 7 >= memory_bus.ppu_memory.wx_ram {
 							let tile_index = memory_bus.ppu_memory.get_win_tile_index((count as u8 + 7 - memory_bus.ppu_memory.wx_ram) / 8, (line - memory_bus.ppu_memory.wy_ram) / 8);
 							tile_attrs = if memory_bus.is_cgb {Some(memory_bus.ppu_memory.get_win_tile_cgb_attr((count as u8 + 7 - memory_bus.ppu_memory.wx_ram) / 8, (line - memory_bus.ppu_memory.wy_ram) / 8))} else {None};
@@ -294,7 +294,7 @@ impl Ppu {
 								}
 							}
 						}
-						if !pixel.2 || bgwin_is_a_zero_pixel {
+						if  !memory_bus.ppu_memory.bg_win_enable || (!pixel.2 && (!memory_bus.is_cgb || !tile_attrs.unwrap().bg_oam_priority)) || bgwin_is_a_zero_pixel {
 							match pixel.0 {
 								TilePixel::Zero =>	{}
 								TilePixel::One =>	{viewport_pixel.clone_from_slice(&Ppu::palette_translation(&if memory_bus.is_cgb {memory_bus.ppu_memory.cgb_obj_palettes[pixel.3]} else {memory_bus.ppu_memory.obj_palettes[pixel.1]}[0]))}
