@@ -80,8 +80,6 @@ fn main() -> Result<(), Error> {
 	let mut ppu = Ppu::new();
 	let mut timer = Timer::new();
 
-	let mut nb_ticks = 0;
-	let mut debug_enabled = false;
 	let mut next_redraw = Instant::now() + Duration::from_micros(16665);
 	let mut frame_completed = false;
 									// "Virtual" tick to realise first PC pointee byte fetch; no operation is executed
@@ -124,7 +122,7 @@ fn main() -> Result<(), Error> {
 							render_result = pixels[&win_id].render();
 						}
 						WindowTypes::Main => {
-							framework.prepare(&windows[&WindowTypes::Main]);
+							framework.prepare(&windows[&WindowTypes::Main], &cpu);
 							render_result = pixels[&win_id].render_with(|encoder, render_target, context| {
 								context.scaling_renderer.render(encoder, render_target);
 								framework.render(encoder, render_target, context);
@@ -204,15 +202,8 @@ fn main() -> Result<(), Error> {
 					cpu.tick(memory_bus.as_mut().unwrap());
 				}
 			} else {
-				while !frame_completed && !framework.gui.is_execution_paused {
-					if nb_ticks >= 25030750 {
-						debug_enabled = false;
-					}
-					if debug_enabled {
-						println!("{:x?}", cpu);
-						println!("Tick count: {}", nb_ticks);
-						std::thread::sleep(std::time::Duration::from_millis(500))
-					}
+				while !frame_completed && !framework.gui.is_execution_paused && (!framework.gui.debugger_window_open || framework.gui.is_debugger_stepping_instr || framework.gui.is_debugger_stepping_frame ){
+					framework.gui.is_debugger_stepping_instr = false;
 					let mut nb_cycles = cpu.tick(memory_bus.as_mut().unwrap());
 					input::tick(memory_bus.as_mut().unwrap(), &main_input);
 					let mut i = 0;
@@ -227,7 +218,9 @@ fn main() -> Result<(), Error> {
 						if ppu_is_halting_cpu {nb_cycles += 2}
 						i += 1;
 					}
-					nb_ticks += nb_cycles as u64;
+				}
+				if frame_completed {
+					framework.gui.is_debugger_stepping_frame = false;
 				}
 			}
 			if Instant::now() >= next_redraw {

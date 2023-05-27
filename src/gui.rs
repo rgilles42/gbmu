@@ -8,6 +8,8 @@ use winit::event::WindowEvent;
 use winit::event_loop::EventLoopWindowTarget;
 use winit::window::Window;
 
+use crate::cpu::Cpu;
+
 pub(crate) struct Framework {
 	// State for egui.
 	egui_ctx: Context,
@@ -70,12 +72,12 @@ impl Framework {
 	}
 
 	/// Prepare egui.
-	pub(crate) fn prepare(&mut self, window: &Window) {
+	pub(crate) fn prepare(&mut self, window: &Window, cpu: &Cpu) {
 		// Run the egui frame and create all paint jobs to prepare for rendering.
 		let raw_input = self.egui_state.take_egui_input(window);
 		let output = self.egui_ctx.run(raw_input, |egui_ctx| {
 			// Draw the demo application.
-			self.gui.ui(egui_ctx);
+			self.gui.ui(egui_ctx, cpu);
 		});
 
 		self.textures.append(output.textures_delta);
@@ -134,14 +136,17 @@ impl Framework {
 pub struct Gui {
 	pub disp_tileset: bool,
 	pub disp_tilemap: bool,
-	window_open: bool,
+	about_window_open: bool,
+	pub debugger_window_open: bool,
 	program_icon_image: Option<egui::ColorImage>,
 	program_icon: Option<egui::TextureHandle>,
 	pub opened_file: Option<PathBuf>,
   	open_file_dialog: Option<FileDialog>,
 	pub reset_requested: bool,
 	pub force_dmg: bool,
-	pub is_execution_paused: bool
+	pub is_execution_paused: bool,
+	pub is_debugger_stepping_instr: bool,
+	pub is_debugger_stepping_frame: bool
 }
 
 impl Gui {
@@ -149,19 +154,22 @@ impl Gui {
 		Self {
 			disp_tileset: false,
 			disp_tilemap: false,
-			window_open: false,
+			about_window_open: false,
+			debugger_window_open: false,
 			program_icon_image: program_icon_rgba.map(|program_icon_rgba| ColorImage::from_rgba_unmultiplied([program_icon_rgba.1 as usize, program_icon_rgba.2 as usize], &program_icon_rgba.0)),
 			program_icon: None,
 			opened_file: None,
 			open_file_dialog: None,
 			reset_requested: false,
 			force_dmg: false,
-			is_execution_paused: false
+			is_execution_paused: false,
+			is_debugger_stepping_instr: false,
+			is_debugger_stepping_frame: false
 		}
 	}
 
 	/// Create the UI using egui.
-	fn ui(&mut self, ctx: &Context) {
+	fn ui(&mut self, ctx: &Context, cpu: &Cpu) {
 		egui::TopBottomPanel::top("menubar_container").show(ctx, |ui| {
 			egui::menu::bar(ui, |ui| {
 				ui.menu_button("File", |ui| {
@@ -188,6 +196,11 @@ impl Gui {
 					}
 				});
 				ui.menu_button("Debug", |ui| {
+					if ui.button("Open debugger").clicked() {
+						self.debugger_window_open = true;
+						ui.close_menu();
+					}
+					ui.separator();
 					if ui.button("Open tileset viewer").clicked() {
 						self.disp_tileset = true;
 						ui.close_menu();
@@ -204,7 +217,7 @@ impl Gui {
 								ui.ctx().load_texture("program_logo", image, TextureOptions { magnification: egui::TextureFilter::Nearest, minification: egui::TextureFilter::Nearest })
 							});
 						}
-						self.window_open = true;
+						self.about_window_open = true;
 						ui.close_menu();
 					}
 				});
@@ -219,7 +232,7 @@ impl Gui {
 			}
 		}
 		egui::Window::new("About GBMU")
-		.open(&mut self.window_open)
+		.open(&mut self.about_window_open)
 		.show(ctx, |ui| {
 			ui.vertical_centered(|ui| {
 				if let Some(texture) = &self.program_icon {
@@ -245,6 +258,39 @@ impl Gui {
 				ui.label("Original logo art by RetroPunkZ -");
 				ui.hyperlink("https://twitter.com/RetroPunkZ1");
 			});
+		});
+
+		egui::Window::new("Debugger")
+		.open(&mut self.debugger_window_open)
+		.show(ctx, |ui| {
+			ui.label("Next Instruction: ".to_owned() + &format!("{:?}", cpu.next_op));
+			ui.label("PC: ".to_owned() + &format!("0x{:04X}", cpu.registers.program_counter - 1) + " + 1");
+			ui.horizontal(|ui| {
+				if ui.button("Step instruction").clicked() {
+					self.is_debugger_stepping_instr = true;
+				}
+				if ui.button("Step frame").clicked() {
+					self.is_debugger_stepping_frame = true;
+				}
+			});
+			ui.separator();
+			ui.horizontal(|ui| {
+				ui.label("A: ".to_owned() + &format!("0x{:02X}", cpu.registers.a));
+				ui.label("F: ".to_owned() + if cpu.registers.f.zero {"Z "} else {"- "} + if cpu.registers.f.substract {"N "} else {"- "} + if cpu.registers.f.half_carry {"H "} else {"- "} + if cpu.registers.f.carry {"C"} else {"-"});
+			});
+			ui.horizontal(|ui| {
+				ui.label("B: ".to_owned() + &format!("0x{:02X}", cpu.registers.b));
+				ui.label("C: ".to_owned() + &format!("0x{:02X}", cpu.registers.c));
+			});
+			ui.horizontal(|ui| {
+				ui.label("D: ".to_owned() + &format!("0x{:02X}", cpu.registers.d));
+				ui.label("E: ".to_owned() + &format!("0x{:02X}", cpu.registers.e));
+			});
+			ui.horizontal(|ui| {
+				ui.label("H: ".to_owned() + &format!("0x{:02X}", cpu.registers.h));
+				ui.label("L: ".to_owned() + &format!("0x{:02X}", cpu.registers.l));
+			});
+			ui.label("SP: ".to_owned() + &format!("0x{:04X}", cpu.registers.stack_pointer));
 		});
 	}
 }
