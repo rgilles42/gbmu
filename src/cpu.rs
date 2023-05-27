@@ -11,7 +11,6 @@ pub enum CpuState{
 	Running, Halted
 }
 
-//#[derive(Debug)]
 pub struct Cpu {
 	pub registers: Registers,
 	pub current_op: Option<Instruction>,

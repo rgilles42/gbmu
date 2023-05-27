@@ -141,7 +141,7 @@ fn main() -> Result<(), Error> {
 			_ => {}
 		}
 		if main_input.update(&event) {
-			if main_input.key_pressed(VirtualKeyCode::Escape) || main_input.close_requested() || main_input.destroyed() { // || nb_ticks > 23579000 // || cpu.registers.program_counter - 1 == 0xFFFF
+			if main_input.key_pressed(VirtualKeyCode::Escape) || main_input.close_requested() || main_input.destroyed() {
                 *control_flow = ControlFlow::Exit;
                 return;
             }
