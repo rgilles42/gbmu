@@ -203,18 +203,17 @@ fn main() -> Result<(), Error> {
 			} else {
 				while !frame_completed && !framework.gui.is_execution_paused && (!framework.gui.debugger_window_open || framework.gui.is_debugger_stepping_instr || framework.gui.is_debugger_stepping_frame ){
 					framework.gui.is_debugger_stepping_instr = false;
-					let mut nb_cycles = cpu.tick(memory_bus.as_mut().unwrap());
+					let nb_cycles = cpu.tick(memory_bus.as_mut().unwrap());
 					input::tick(memory_bus.as_mut().unwrap(), &main_input);
 					let mut i = 0;
 					let mut ppu_is_halting_cpu = false;
-					while i < nb_cycles {
+					while i < nb_cycles || ppu_is_halting_cpu {
 						timer.tick(memory_bus.as_mut().unwrap());
 						let res = if !memory_bus.as_ref().unwrap().is_double_speed || i % 2 == 0 {
-								ppu.tick(memory_bus.as_mut().unwrap(), pixels.get_mut(&windows[&WindowTypes::Main].id()).unwrap().frame_mut())
-							} else {(false, ppu_is_halting_cpu)};
+													ppu.tick(memory_bus.as_mut().unwrap(), pixels.get_mut(&windows[&WindowTypes::Main].id()).unwrap().frame_mut())
+												} else {(false, ppu_is_halting_cpu)};
 						frame_completed |= res.0;
 						ppu_is_halting_cpu = res.1;
-						if ppu_is_halting_cpu {nb_cycles += 2}
 						i += 1;
 					}
 				}
