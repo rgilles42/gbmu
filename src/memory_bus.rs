@@ -366,7 +366,7 @@ impl MemoryBus {
 			0xFF43			=>		  {self.ppu_memory.scx_ram = data},
 			0xFF44			=>		  {},
 			0xFF45			=>		  {self.ppu_memory.lyc_ram = data},
-			0xFF46			=>		  {self.ppu_memory.oam_dma_reg = data},
+			0xFF46			=>		  {self.ppu_memory.oam_dma_reg = data; self.ppu_memory.oam_dma_is_active = true;},
 			0xFF48 | 0xFF49 =>		self.ppu_memory.write(address as usize, data, false),
 			0xFF4A			=>		  {self.ppu_memory.wy_ram = data},
 			0xFF4B			=>		  {self.ppu_memory.wx_ram = data},

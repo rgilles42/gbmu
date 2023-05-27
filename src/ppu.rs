@@ -320,7 +320,7 @@ impl Ppu {
 			)
 		}
 		if self.oam_dma_count == 643 {
-			memory_bus.ppu_memory.oam_dma_reg = 0x00;
+			memory_bus.ppu_memory.oam_dma_is_active = false;
 			self.oam_dma_count = 0;
 		} else {
 			self.oam_dma_count += 1;
@@ -340,8 +340,11 @@ impl Ppu {
 
 	pub fn tick(&mut self, memory_bus: &mut MemoryBus, framebuffer: &mut [u8]) -> (bool, bool) {
 		let mut ppu_doing_vram_dma_transfer = false;
-		if memory_bus.ppu_memory.oam_dma_reg != 0x00 {
+		if memory_bus.ppu_memory.oam_dma_is_active {
 			self.tick_oam_dma(memory_bus);
+			if memory_bus.is_double_speed {
+				self.tick_oam_dma(memory_bus);
+			}
 		}
 		if memory_bus.is_cgb && memory_bus.ppu_memory.vram_dma_is_active {
 			if !memory_bus.ppu_memory.vram_dma_is_hblank_mode {
