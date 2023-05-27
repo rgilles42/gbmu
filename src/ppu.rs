@@ -328,7 +328,7 @@ impl Ppu {
 	}
 
 	fn tick_vram_dma(&mut self, memory_bus: &mut MemoryBus) {
-		memory_bus.write_byte(0x8000 | (memory_bus.ppu_memory.vram_dma_dst_regs & 0x1FF0) | self.vram_dma_count , memory_bus.read_byte((memory_bus.ppu_memory.vram_dma_src_regs  & 0xFFF0) | self.vram_dma_count));
+		memory_bus.write_byte(0x8000 | (memory_bus.ppu_memory.vram_dma_dst_regs & 0x1FF0) | self.vram_dma_count, memory_bus.read_byte((memory_bus.ppu_memory.vram_dma_src_regs  & 0xFFF0) | self.vram_dma_count));
 		if self.vram_dma_count == 0x0F {
 			self.vram_dma_count = 0x00;
 			memory_bus.ppu_memory.vram_dma_stat = memory_bus.ppu_memory.vram_dma_stat.overflowing_sub(0x01).0;

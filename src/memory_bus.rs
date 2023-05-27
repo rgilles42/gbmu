@@ -317,6 +317,7 @@ impl MemoryBus {
 			0xFEA0..=0xFEFF	=> 0,
 			0xFF00			=>		self.input_memory.read(),
 			0xFF04..=0xFF07 =>		self.timer_memory.read(address as usize),
+			0xFF26			=>		0x00,
 			0xFF40 | 0xFF47 =>		  self.ppu_memory.read(address as usize, false),
 			0xFF41			=>		self.ppu_memory.read(address as usize, false),
 			0xFF42			=>		  self.ppu_memory.scy_ram,
