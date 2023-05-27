@@ -21,16 +21,15 @@ use memory_bus::MemoryBus;
 use ppu::{Ppu, VIEWPORT_PX_WIDTH, VIEWPORT_PX_HEIGHT, TILEMAP_PX_HEIGHT, TILEMAP_PX_WIDTH, TILESET_VIEWER_PX_WIDTH, TILESET_VIEWER_PX_HEIGHT};
 use timer::Timer;
 
-const ICON_PATH: &str = "assets/gbmu.bmp";
-
 #[derive(PartialEq, Eq, Hash, Debug, Clone, Copy)]
 enum WindowTypes {
 	Main, Tileset, Tilemap
 }
 
 fn main() -> Result<(), Error> {
+	let project_icon = include_bytes!("../assets/gbmu.bmp");
 	let program_icon_rgba = {
-		let image = image::open(ICON_PATH);
+		let image = image::load_from_memory_with_format(project_icon, image::ImageFormat::Bmp);
 		if let Ok(image_contents) = image {
 			let image = image_contents.into_rgba8();
 			let image_dims = image.dimensions();
