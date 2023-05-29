@@ -250,7 +250,7 @@ impl Gui {
 			ui.separator();
 			ui.horizontal(|ui| {
 				ui.spacing_mut().item_spacing.x /= 2.0;
-				ui.label("By Raphaël Gilles (rgilles) & Mederic Martinet (memartin) -");
+				ui.label("By Raphaël Gilles (rgilles) -");
 				ui.hyperlink("https://github.com/rgilles42/gbmu");
 			});
 			ui.horizontal(|ui| {
